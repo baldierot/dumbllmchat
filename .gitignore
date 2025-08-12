@@ -4,7 +4,7 @@ gemini-cli-additional-context.txt
 /node_modules
 
 # Build output
-# /dist
+/dist
 
 # Logs
 logs
