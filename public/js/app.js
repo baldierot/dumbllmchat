@@ -60,15 +60,33 @@ document.addEventListener('DOMContentLoaded', () => {
         div.dataset.index = index;
 
         div.querySelectorAll('pre').forEach(pre => {
+            const code = pre.querySelector('code');
+            const language = code.className.split('-')[1] || '';
+
+            const container = document.createElement('div');
+            container.className = 'code-block-container';
+
+            const header = document.createElement('div');
+            header.className = 'code-block-header';
+
+            const languageLabel = document.createElement('span');
+            languageLabel.textContent = language;
+            header.appendChild(languageLabel);
+
             const copyBtn = document.createElement('button');
             copyBtn.textContent = 'Copy';
             copyBtn.className = 'copy-code-btn';
-            pre.appendChild(copyBtn);
+            header.appendChild(copyBtn);
+
+            container.appendChild(header);
+            container.appendChild(pre.cloneNode(true));
+            pre.replaceWith(container);
+
 
             copyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const code = pre.querySelector('code').innerText;
-                navigator.clipboard.writeText(code).then(() => {
+                const codeToCopy = code.innerText;
+                navigator.clipboard.writeText(codeToCopy).then(() => {
                     copyBtn.textContent = 'Copied!';
                     setTimeout(() => {
                         copyBtn.textContent = 'Copy';
@@ -423,25 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
         input.click();
     });
 
-    copyChatBtn.addEventListener('click', () => {
-        const messages = window.chatAPI.getMessages();
-        const chatText = messages.map(msg => `${msg.sender}: ${msg.content}`).join('\n');
-        navigator.clipboard.writeText(chatText).then(() => {
-            alert('Chat copied to clipboard!');
-        }, () => {
-            alert('Failed to copy chat.');
-        });
-    });
-
-    copyChatBtn.addEventListener('click', () => {
-        const messages = window.chatAPI.getMessages();
-        const chatText = messages.map(msg => `${msg.sender}: ${msg.content}`).join('\n');
-        navigator.clipboard.writeText(chatText).then(() => {
-            alert('Chat copied to clipboard!');
-        }, () => {
-            alert('Failed to copy chat.');
-        });
-    });
+    
 
     // Initial Render
     const currentModel = window.chatAPI.getCurrentModel();
