@@ -2,7 +2,9 @@
 {
     "name": "Dumb LLM Chat",
     "short_name": "DumbLLMChat",
-    "start_url": "/",
+    "start_url": "./",
+    "scope": "./",
+    "homepage": "https://baldierot.github.io/dumbchatllm",
     "display": "standalone",
     "background_color": "#f8fafc",
     "theme_color": "#f8fafc",
