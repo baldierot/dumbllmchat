@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderMessages();
             }
             sendBtn.disabled = false;
-            messageInput.focus();
+            // messageInput.focus();
         }
     });
 
