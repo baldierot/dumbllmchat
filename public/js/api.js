@@ -9,22 +9,43 @@ class ChatAPI {
         const models = localStorage.getItem('llm_models');
         return models ? JSON.parse(models) : [
             {
-                endpoint: 'https://api.openai.com/v1/chat/completions',
-                apiKey: '',
-                model: 'gpt-3.5-turbo',
-                nickname: 'GPT-3.5',
-                temperature: 0.7,
-                system_prompt: 'You are a helpful assistant.',
-                apiSchema: 'openai'
+                "endpoint": "https://ac92dd4c6c84.ngrok-free.app/https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+                "model": "",
+                "nickname": "flash-lite",
+                "apiKey": "",
+                "temperature": 0.7,
+                "maxOutputTokens": null,
+                "system_prompt": "You are a helpful assistant.",
+                "apiSchema": "google",
+                "useGoogleSearch": true,
+                "prependSystemPrompt": false,
+                "thinkingBudget": 24576
             },
             {
-                endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent',
-                apiKey: '',
-                model: 'gemini-1.5-flash-latest',
-                nickname: 'Gemini 1.5 Flash',
-                temperature: 0.7,
-                system_prompt: 'You are a helpful assistant.',
-                apiSchema: 'google'
+                "endpoint": "https://ac92dd4c6c84.ngrok-free.app/https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                "model": "",
+                "nickname": "flash",
+                "apiKey": "",
+                "temperature": 0.7,
+                "maxOutputTokens": null,
+                "system_prompt": "You are a helpful assistant.",
+                "apiSchema": "google",
+                "useGoogleSearch": true,
+                "prependSystemPrompt": false,
+                "thinkingBudget": 24576
+            },
+            {
+                "endpoint": "https://ac92dd4c6c84.ngrok-free.app/https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
+                "model": "",
+                "nickname": "pro",
+                "apiKey": "",
+                "temperature": 0.7,
+                "maxOutputTokens": null,
+                "system_prompt": "You are a helpful assistant.",
+                "apiSchema": "google",
+                "useGoogleSearch": true,
+                "prependSystemPrompt": false,
+                "thinkingBudget": 32768
             }
         ];
     }
@@ -99,7 +120,7 @@ class ChatAPI {
 
     async sendMessage(messages) {
         const currentModel = this.getCurrentModel();
-        const { endpoint, apiKey, model, temperature, system_prompt, apiSchema, useGoogleSearch, maxOutputTokens, prependSystemPrompt } = currentModel;
+        const { endpoint, apiKey, model, temperature, system_prompt, apiSchema, useGoogleSearch, maxOutputTokens, prependSystemPrompt, thinkingBudget } = currentModel;
 
         let requestBody;
         let fetchEndpoint = endpoint;
@@ -159,6 +180,12 @@ class ChatAPI {
                         "google_search": {}
                     }
                 ];
+            }
+
+            if (thinkingBudget) {
+                requestBody.generationConfig.thinkingConfig = {
+                    thinkingBudget: thinkingBudget
+                }
             }
 
             fetchEndpoint = endpoint;

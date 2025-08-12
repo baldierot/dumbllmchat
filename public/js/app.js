@@ -47,17 +47,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const createMessageElement = (msg, index) => {
         const div = document.createElement('div');
         let bgColor = 'bg-gray-300 dark:bg-gray-700';
-        let alignClass = 'message-assistant';
+        let alignClass = 'self-start';
         if (msg.sender === 'User') {
             bgColor = 'bg-blue-500 text-white';
-            alignClass = 'message-user';
+            alignClass = 'self-end';
         } else if (msg.sender === 'Error') {
             bgColor = 'bg-red-500 text-white';
         }
 
-        div.className = `p-3 rounded-lg ${bgColor} w-full ${alignClass}`;
-        div.textContent = msg.content;
+        div.className = `p-3 rounded-lg ${bgColor} w-full ${alignClass} message`;
+        div.innerHTML = marked.parse(msg.content, { breaks: true });
         div.dataset.index = index;
+
+        div.querySelectorAll('pre').forEach(pre => {
+            const copyBtn = document.createElement('button');
+            copyBtn.textContent = 'Copy';
+            copyBtn.className = 'copy-code-btn';
+            pre.appendChild(copyBtn);
+
+            copyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const code = pre.querySelector('code').innerText;
+                navigator.clipboard.writeText(code).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                    }, 2000);
+                }, () => {
+                    alert('Failed to copy code.');
+                });
+            });
+        });
 
         if (msg.sender !== 'Error') {
             div.addEventListener('click', (e) => {
@@ -79,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const editBtn = document.createElement('button');
         editBtn.textContent = '✏️';
         editBtn.addEventListener('click', () => {
-            const newContent = prompt('Edit message:', messageElement.textContent);
+            const newContent = prompt('Edit message:', window.chatAPI.getMessages()[messageElement.dataset.index].content);
             if (newContent) {
                 window.chatAPI.updateMessage(messageElement.dataset.index, newContent);
                 renderMessages();
@@ -220,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="checkbox" id="prepend-system-prompt-checkbox-${index}" class="mr-2" ${model.prependSystemPrompt ? 'checked' : ''}>
                         <label for="prepend-system-prompt-checkbox-${index}">Prepend System Prompt</label>
                     </div>
+                    <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
                 </div>
             `;
             llmConfigsContainer.appendChild(configDiv);
@@ -289,8 +310,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 maxOutputTokens: parseInt(configDiv.querySelector('input[placeholder="Max Output Tokens"]').value, 10),
                 system_prompt: configDiv.querySelector('textarea').value,
                 apiSchema: configDiv.querySelector('.api-schema').value,
-                useGoogleSearch: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[type="checkbox"]').checked : false,
+                useGoogleSearch: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[id^="google-search-checkbox-"]').checked : false,
                 prependSystemPrompt: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[id^="prepend-system-prompt-checkbox-"]').checked : false,
+                thinkingBudget: configDiv.querySelector('.api-schema').value === 'google' ? parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10) : null,
             };
         });
         window.chatAPI.saveModels(newModels);

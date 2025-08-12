@@ -2,6 +2,7 @@
 const CACHE_NAME = 'dumbllmchat-cache-v1';
 const urlsToCache = [
   '/',
+  '/index.html',
   '/css/style.css',
   '/js/api.js',
   '/js/app.js',
@@ -20,14 +21,19 @@ self.addEventListener('install', event => {
 
 self.addEventListener('fetch', event => {
   event.respondWith(
-    fetch(event.request).then(response => {
-      const responseToCache = response.clone();
-      caches.open(CACHE_NAME).then(cache => {
-        cache.put(event.request, responseToCache);
-      });
-      return response;
-    }).catch(() => {
-      return caches.match(event.request);
-    })
+    fetch(event.request)
+      .then(response => {
+        // If the request was successful, cache the response and return it
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME)
+          .then(cache => {
+            cache.put(event.request, responseToCache);
+          });
+        return response;
+      })
+      .catch(() => {
+        // If the network request fails, try to find a match in the cache
+        return caches.match(event.request);
+      })
   );
 });
