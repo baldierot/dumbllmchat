@@ -82,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
             container.appendChild(pre.cloneNode(true));
             pre.replaceWith(container);
 
+            hljs.highlightElement(container.querySelector('pre code'));
 
             copyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
