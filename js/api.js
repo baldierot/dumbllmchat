@@ -238,7 +238,9 @@ class ChatAPI {
             let message;
 
             if (apiSchema === 'google') {
-                message = { content: data.candidates[0].content.parts[0].text };
+                const contentParts = data.candidates[0].content.parts;
+                const combinedText = contentParts.map(part => part.text).join('');
+                message = { content: combinedText };
             } else { // openai
                 message = data.choices[0]?.message;
             }
