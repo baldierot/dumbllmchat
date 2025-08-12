@@ -1,9 +1,0 @@
-/* Custom styles can be added here */
-
-.message-user {
-    align-self: flex-end;
-}
-
-.message-assistant {
-    align-self: flex-start;
-}

@@ -362,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderMessages();
             }
             sendBtn.disabled = false;
-            messageInput.focus();
+            // messageInput.focus();
         }
     });
 
@@ -378,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const clientY = e.clientY || (e.touches && e.touches[0].clientY);
             if (clientY === undefined) return;
             const newHeight = window.innerHeight - clientY;
-            const minHeight = 120; // Minimum height for the footer
+            const minHeight = 140; // Minimum height for the footer
             const maxHeight = 500; // Maximum height for the footer
             if (newHeight >= minHeight && newHeight <= maxHeight) {
                 footer.style.height = `${newHeight}px`;
