@@ -9,7 +9,7 @@ class ChatAPI {
         const models = localStorage.getItem('llm_models');
         return models ? JSON.parse(models) : [
             {
-                "endpoint": "https://ac92dd4c6c84.ngrok-free.app/https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
+                "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
                 "model": "",
                 "nickname": "flash-lite",
                 "apiKey": "",
@@ -22,7 +22,7 @@ class ChatAPI {
                 "thinkingBudget": 24576
             },
             {
-                "endpoint": "https://ac92dd4c6c84.ngrok-free.app/https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
                 "model": "",
                 "nickname": "flash",
                 "apiKey": "",
@@ -35,7 +35,7 @@ class ChatAPI {
                 "thinkingBudget": 24576
             },
             {
-                "endpoint": "https://ac92dd4c6c84.ngrok-free.app/https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
+                "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
                 "model": "",
                 "nickname": "pro",
                 "apiKey": "",
