@@ -150,6 +150,13 @@ document.addEventListener('DOMContentLoaded', () => {
             messageContent.appendChild(editContainer);
             textarea.focus();
 
+            editContainer.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    saveBtn.click();
+                }
+            });
+
             saveBtn.addEventListener('click', () => {
                 const newContent = textarea.value;
                 if (newContent) {
