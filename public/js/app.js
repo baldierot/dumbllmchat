@@ -279,7 +279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         llmConfigsContainer.innerHTML = '';
         window.chatAPI.getModels().forEach((model, index) => {
             const configDiv = document.createElement('div');
-            configDiv.className = 'mb-4 p-4 border rounded-lg dark:border-gray-600';
+            configDiv.className = 'mb-4 p-4 border border-black rounded-lg dark:border-black';
             configDiv.innerHTML = `
                 <div class="flex justify-between items-center mb-2">
                     <h3 class="text-lg font-semibold">${model.nickname}</h3>
@@ -290,10 +290,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="text" value="${model.model}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Model Name">
                 </div>
                 <input type="text" value="${model.nickname}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nickname">
+                <textarea class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="System Prompt">${model.system_prompt}</textarea>
                 <input type="password" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
                 <input type="number" step="0.1" value="${model.temperature}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Temperature">
                 <input type="number" value="${model.maxOutputTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Output Tokens">
-                <textarea class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="System Prompt">${model.system_prompt}</textarea>
+                <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
                 <select class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600 api-schema" placeholder="API Schema">
                     <option value="openai" ${model.apiSchema === 'openai' ? 'selected' : ''}>OpenAI</option>
                     <option value="google" ${model.apiSchema === 'google' ? 'selected' : ''}>Google</option>
@@ -307,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="checkbox" id="prepend-system-prompt-checkbox-${index}" class="mr-2" ${model.prependSystemPrompt ? 'checked' : ''}>
                         <label for="prepend-system-prompt-checkbox-${index}">Prepend System Prompt</label>
                     </div>
-                    <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
                 </div>
             `;
             llmConfigsContainer.appendChild(configDiv);
