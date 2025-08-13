@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             editContainer.className = 'w-full';
 
             const textarea = document.createElement('textarea');
-            textarea.className = 'w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 resize-y text-black dark:text-white';
+            textarea.className = `w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 resize-y text-black dark:text-white min-h-[${messageElement.offsetHeight}px]`;
             textarea.value = originalContent;
             
             const saveBtn = document.createElement('button');
