@@ -39,9 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
             chatContainer.appendChild(messageElement);
             lastMessageElement = messageElement;
         });
-        if (lastMessageElement) {
-            lastMessageElement.scrollIntoView({ behavior: 'smooth' });
-        }
+        // if (lastMessageElement) {
+        //     lastMessageElement.scrollIntoView({ behavior: 'smooth' });
+        // }
     };
 
     const createMessageElement = (msg, index) => {
@@ -56,7 +56,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         div.className = `p-3 rounded-lg ${bgColor} w-full ${alignClass} message`;
-        div.innerHTML = marked.parse(msg.content, { breaks: true });
+
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        messageContent.innerHTML = marked.parse(msg.content, { breaks: true });
+        div.appendChild(messageContent);
+
         div.dataset.index = index;
 
         div.querySelectorAll('pre').forEach(pre => {
@@ -118,11 +123,47 @@ document.addEventListener('DOMContentLoaded', () => {
         const editBtn = document.createElement('button');
         editBtn.textContent = '✏️';
         editBtn.addEventListener('click', () => {
-            const newContent = prompt('Edit message:', window.chatAPI.getMessages()[messageElement.dataset.index].content);
-            if (newContent) {
-                window.chatAPI.updateMessage(messageElement.dataset.index, newContent);
-                renderMessages();
-            }
+            const index = messageElement.dataset.index;
+            const messageContent = messageElement.querySelector('.message-content');
+            const originalContent = window.chatAPI.getMessages()[index].content;
+
+            const editContainer = document.createElement('div');
+            editContainer.className = 'w-full';
+
+            const textarea = document.createElement('textarea');
+            textarea.className = 'w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 resize-y text-black dark:text-white';
+            textarea.value = originalContent;
+            
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = 'Save';
+            saveBtn.className = 'bg-blue-500 text-white px-4 py-2 rounded-lg mt-2';
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.className = 'bg-gray-500 text-white px-4 py-2 rounded-lg mt-2 ml-2';
+
+            editContainer.appendChild(textarea);
+            editContainer.appendChild(saveBtn);
+            editContainer.appendChild(cancelBtn);
+
+            messageContent.innerHTML = '';
+            messageContent.appendChild(editContainer);
+            textarea.focus();
+
+            saveBtn.addEventListener('click', () => {
+                const newContent = textarea.value;
+                if (newContent) {
+                    window.chatAPI.updateMessage(index, newContent);
+                    const newMessageElement = createMessageElement(window.chatAPI.getMessages()[index], index);
+                    messageElement.replaceWith(newMessageElement);
+                }
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                const originalMessageElement = createMessageElement(window.chatAPI.getMessages()[index], index);
+                messageElement.replaceWith(originalMessageElement);
+            });
+
             removeMessageControls();
         });
 
