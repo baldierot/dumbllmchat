@@ -84,14 +84,17 @@ define(['./workbox-54d0af47'], (function (workbox) { 'use strict';
     "url": "assets/index-DS0FGUBj.js",
     "revision": null
   }, {
+    "url": "images/icon-512x512.png",
+    "revision": "bb3850071170a4b0d1c31e4adb1896b5"
+  }, {
     "url": "index.html",
-    "revision": "57dbea8aef97cbe7ca173ae8b48dc5c2"
+    "revision": "99a7980cb0948c03a9371ce39d180e68"
   }, {
     "url": "registerSW.js",
-    "revision": "6e18d96a85da70990010526b4d21040a"
+    "revision": "25cd3309a4b4202b7e1a873589cec586"
   }, {
     "url": "manifest.webmanifest",
-    "revision": "98bebd42bd00d25137fd54b7f1f80819"
+    "revision": "7c3967e9f79374553f0c226d72de18ce"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));
