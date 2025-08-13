@@ -366,6 +366,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            sendBtn.click();
+        }
+    });
+
     let resizing = false;
     const startResize = (e) => {
         resizing = true;

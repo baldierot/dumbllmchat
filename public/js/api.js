@@ -238,9 +238,13 @@ class ChatAPI {
             let message;
 
             if (apiSchema === 'google') {
-                const contentParts = data.candidates[0].content.parts;
-                const combinedText = contentParts.map(part => part.text).join('');
-                message = { content: combinedText };
+                const content = data.candidates[0].content;
+                if (content && content.parts) {
+                    const combinedText = content.parts.map(part => part.text).join('');
+                    message = { content: combinedText };
+                } else {
+                    message = { content: '[The model sent an empty response.]' };
+                }
             } else { // openai
                 message = data.choices[0]?.message;
             }
