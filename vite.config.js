@@ -3,7 +3,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 
 export default defineConfig({
-  root: 'public',
+  root: 'src',
+  publicDir: "../public",
   base: '/dumbllmchat/',
   build: {
     outDir: '../dist'
@@ -28,14 +29,6 @@ export default defineConfig({
           }
         ]
       }
-    }),
-    viteStaticCopy({
-      targets: [
-        {
-          src: 'images',
-          dest: '.'
-        }
-      ]
     })
   ]
 })
