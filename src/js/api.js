@@ -99,24 +99,31 @@ class ChatAPI {
         return this.messages;
     }
 
-    async addMessage(message) {
-        const id = await window.db.addMessage(message);
-        this.messages.push({ ...message, id });
+    async getMessage(id) {
+        this.messages = await window.db.getMessages();
+        return this.messages.find(m => m.id === id);
     }
 
-    async updateMessage(index, content, files) {
-        const message = this.messages[index];
+    async addMessage(message) {
+        const id = await window.db.addMessage(message);
+        const newMessage = { ...message, id };
+        this.messages.push(newMessage);
+        return newMessage;
+    }
+
+    async updateMessage(id, content, files) {
+        const message = await this.getMessage(id);
         message.content = content;
         if (files) {
             message.files = files;
         }
         await window.db.updateMessage(message);
+        return message;
     }
 
-    async removeMessage(index) {
-        const message = this.messages[index];
-        await window.db.removeMessage(message.id);
-        this.messages.splice(index, 1);
+    async removeMessage(id) {
+        await window.db.removeMessage(id);
+        this.messages = this.messages.filter(m => m.id !== id);
     }
 
     async clearMessages() {
@@ -283,16 +290,14 @@ class ChatAPI {
 
             if (message?.content) {
                 const assistantMessage = { sender: 'Assistant', content: message.content };
-                this.addMessage(assistantMessage);
-                return assistantMessage;
+                return await this.addMessage(assistantMessage);
             } else if (message?.tool_calls) {
                 const toolCall = message.tool_calls[0];
                 const functionName = toolCall.function.name;
                 const functionArgs = toolCall.function.arguments;
                 const content = `The model wants to call the '${functionName}' tool with the following arguments: ${functionArgs}. However, tool execution is not yet implemented.`;
                 const toolMessage = { sender: 'Assistant', content: content };
-                this.addMessage(toolMessage);
-                return toolMessage;
+                return await this.addMessage(toolMessage);
             } else {
                 throw new Error('API Error: Invalid response format.');
             }
@@ -300,8 +305,7 @@ class ChatAPI {
         } catch (error) {
             console.error('API call failed:', error);
             const errorMessage = { sender: 'Error', content: `An error occurred: ${error.message}` };
-            this.addMessage(errorMessage);
-            return errorMessage;
+            return await this.addMessage(errorMessage);
         }
     }
 }

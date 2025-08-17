@@ -20,15 +20,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const attachedFilesContainer = document.getElementById('attached-files-container');
     const cancelEditBtn = document.getElementById('cancel-edit-btn');
 
-    let selectedMessage = null;
     let attachedFiles = [];
-    let editingMessageIndex = null;
+    let editingMessageId = null;
+    let selectedMessage = null;
+
+    const chatView = new window.ChatView(chatContainer);
+
+    chatContainer.addEventListener('message-selected', (e) => {
+        const { messageElement, x, y } = e.detail;
+        if (selectedMessage) {
+            removeMessageControls();
+        }
+        selectedMessage = messageElement;
+        showMessageControls(messageElement, x, y);
+    });
 
     document.addEventListener('click', (e) => {
         const controls = document.querySelector('.message-controls');
         if (!controls) return;
 
-        const clickedMessage = e.target.closest('[data-index]');
+        const clickedMessage = e.target.closest('[data-id]');
         const clickedControls = e.target.closest('.message-controls');
 
         if (!clickedMessage && !clickedControls) {
@@ -36,131 +47,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    const renderMessages = async () => {
-        chatContainer.innerHTML = '';
-        let lastMessageElement = null;
-        const messages = await window.chatAPI.getMessages();
-        messages.forEach((msg, index) => {
-            const messageElement = createMessageElement(msg, index);
-            chatContainer.appendChild(messageElement);
-            lastMessageElement = messageElement;
-        });
-        // if (lastMessageElement) {
-        //     lastMessageElement.scrollIntoView({ behavior: 'smooth' });
-        // }
-    };
-
-    const createMessageElement = (msg, index) => {
-        const div = document.createElement('div');
-        let bgColor = 'bg-gray-300 dark:bg-gray-700';
-        let alignClass = 'self-start';
-        if (msg.sender === 'User') {
-            bgColor = 'bg-blue-500 text-white';
-            alignClass = 'self-end';
-        } else if (msg.sender === 'Error') {
-            bgColor = 'bg-red-500 text-white';
-        }
-
-        div.className = `p-3 rounded-lg ${bgColor} w-full ${alignClass} message`;
-
-        const messageContent = document.createElement('div');
-        messageContent.className = 'message-content';
-        messageContent.innerHTML = marked.parse(msg.content, { breaks: true });
-        div.appendChild(messageContent);
-
-        if (msg.files && msg.files.length > 0) {
-            const filesContainer = document.createElement('div');
-            filesContainer.className = 'flex flex-wrap gap-2 mt-2';
-            msg.files.forEach(file => {
-                const fileElement = document.createElement('div');
-                fileElement.className = 'flex items-center bg-gray-200 dark:bg-gray-600 rounded-lg p-2';
-                const fileName = document.createElement('span');
-                fileName.className = 'mr-2 text-gray-800 dark:text-gray-200';
-                fileName.textContent = file.name;
-                fileElement.appendChild(fileName);
-
-                const downloadBtn = document.createElement('button');
-                downloadBtn.textContent = '⬇️';
-                downloadBtn.className = 'download-file-btn';
-                downloadBtn.addEventListener('click', () => {
-                    const a = document.createElement('a');
-                    a.href = file.data;
-                    a.download = file.name;
-                    a.click();
-                });
-                fileElement.appendChild(downloadBtn);
-                filesContainer.appendChild(fileElement);
-            });
-            div.appendChild(filesContainer);
-        }
-
-        div.dataset.index = index;
-
-        div.querySelectorAll('pre').forEach(pre => {
-            const code = pre.querySelector('code');
-            const language = code.className.split('-')[1] || '';
-
-            const container = document.createElement('div');
-            container.className = 'code-block-container';
-
-            const header = document.createElement('div');
-            header.className = 'code-block-header';
-
-            const languageLabel = document.createElement('span');
-            languageLabel.textContent = language;
-            header.appendChild(languageLabel);
-
-            const copyBtn = document.createElement('button');
-            copyBtn.textContent = 'Copy';
-            copyBtn.className = 'copy-code-btn';
-            header.appendChild(copyBtn);
-
-            container.appendChild(header);
-            container.appendChild(pre.cloneNode(true));
-            pre.replaceWith(container);
-
-            hljs.highlightElement(container.querySelector('pre code'));
-
-            copyBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const codeToCopy = code.innerText;
-                navigator.clipboard.writeText(codeToCopy).then(() => {
-                    copyBtn.textContent = 'Copied!';
-                    setTimeout(() => {
-                        copyBtn.textContent = 'Copy';
-                    }, 2000);
-                }, () => {
-                    alert('Failed to copy code.');
-                });
-            });
-        });
-
-        if (msg.sender !== 'Error') {
-            div.addEventListener('click', (e) => {
-                if (selectedMessage) {
-                    removeMessageControls();
-                }
-                selectedMessage = div;
-                showMessageControls(div, e.clientX, e.clientY);
-            });
-        }
-
-        return div;
-    };
-
     const showMessageControls = async (messageElement, x, y) => {
         const controls = document.createElement('div');
         controls.className = 'message-controls absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2 flex space-x-2';
+        const messageId = parseInt(messageElement.dataset.id);
 
         const editBtn = document.createElement('button');
         editBtn.textContent = '✏️';
         editBtn.addEventListener('click', async () => {
-            const index = messageElement.dataset.index;
-            const messages = await window.chatAPI.getMessages();
-            const message = messages[index];
+            const message = await window.chatAPI.getMessage(messageId);
             messageInput.value = message.content;
             attachedFiles = message.files || [];
-            editingMessageIndex = index;
+            editingMessageId = messageId;
             renderAttachedFiles();
             cancelEditBtn.classList.remove('hidden');
             sendBtn.textContent = '💾';
@@ -172,8 +70,8 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteBtn.textContent = '🗑️';
         deleteBtn.addEventListener('click', async () => {
             if (confirm('Are you sure you want to delete this message?')) {
-                await window.chatAPI.removeMessage(messageElement.dataset.index);
-                await renderMessages();
+                await window.chatAPI.removeMessage(messageId);
+                chatView.removeMessage(messageId);
             }
             removeMessageControls();
         });
@@ -192,15 +90,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const regenerateBtn = document.createElement('button');
         regenerateBtn.textContent = '🔄️';
         regenerateBtn.addEventListener('click', async () => {
-            const index = parseInt(messageElement.dataset.index);
             const messages = await window.chatAPI.getMessages();
-            const clickedMessage = messages[index];
+            const messageIndex = messages.findIndex(m => m.id === messageId);
+            const clickedMessage = messages[messageIndex];
 
             let newMessages;
             if (clickedMessage.sender === 'User') {
-                newMessages = messages.slice(0, index + 1);
+                newMessages = messages.slice(0, messageIndex + 1);
             } else { // Assistant message
-                newMessages = messages.slice(0, index);
+                newMessages = messages.slice(0, messageIndex);
             }
 
             window.chatAPI.messages = newMessages;
@@ -208,24 +106,25 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const msg of newMessages) {
                 await window.db.addMessage(msg);
             }
-            await renderMessages();
+            
+            const scrollTop = chatContainer.scrollTop;
+            chatView.renderMessages(newMessages);
+            chatContainer.scrollTop = scrollTop;
 
             const lastMessage = newMessages[newMessages.length - 1];
             if (lastMessage && lastMessage.sender === 'User') {
                 removeMessageControls();
                 sendBtn.disabled = true;
 
-                const pendingMessage = { sender: 'Assistant', content: '...' };
-                const pendingDiv = createMessageElement(pendingMessage, -1);
-                chatContainer.appendChild(pendingDiv);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+                const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
+                chatView.appendMessage(pendingMessage);
 
                 const response = await window.chatAPI.sendMessage(newMessages);
-
-                chatContainer.removeChild(pendingDiv);
+                
+                chatView.removeMessage(-1);
 
                 if (response) {
-                    await renderMessages();
+                    chatView.appendMessage(response);
                 }
                 sendBtn.disabled = false;
                 messageInput.focus();
@@ -434,38 +333,35 @@ document.addEventListener('DOMContentLoaded', () => {
     sendBtn.addEventListener('click', async () => {
         const content = messageInput.value.trim();
         if (content || attachedFiles.length > 0) {
-            if (editingMessageIndex !== null) {
-                await window.chatAPI.updateMessage(editingMessageIndex, content, attachedFiles);
-                editingMessageIndex = null;
+            if (editingMessageId !== null) {
+                const updatedMessage = await window.chatAPI.updateMessage(editingMessageId, content, attachedFiles);
+                chatView.editMessage(updatedMessage);
+                editingMessageId = null;
                 cancelEditBtn.classList.add('hidden');
                 sendBtn.textContent = '▶️';
                 messageInput.value = '';
                 attachedFiles = [];
                 renderAttachedFiles();
-                await renderMessages();
             } else {
                 const userMessage = { sender: 'User', content, files: attachedFiles };
-                await window.chatAPI.addMessage(userMessage);
+                const newUserMessage = await window.chatAPI.addMessage(userMessage);
+                chatView.appendMessage(newUserMessage);
                 messageInput.value = '';
                 attachedFiles = [];
                 renderAttachedFiles();
-                await renderMessages();
 
                 sendBtn.disabled = true;
-                const pendingMessage = { sender: 'Assistant', content: '...' };
-                const pendingDiv = createMessageElement(pendingMessage, -1);
-                chatContainer.appendChild(pendingDiv);
-                pendingDiv.scrollIntoView({ behavior: 'smooth' });
+                const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
+                chatView.appendMessage(pendingMessage);
 
                 const response = await window.chatAPI.sendMessage(await window.chatAPI.getMessages());
 
-                chatContainer.removeChild(pendingDiv);
+                chatView.removeMessage(-1);
 
                 if (response) {
-                    await renderMessages();
+                    chatView.appendMessage(response);
                 }
                 sendBtn.disabled = false;
-                // messageInput.focus();
             }
         }
     });
@@ -473,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelEditBtn.addEventListener('click', () => {
         messageInput.value = '';
         attachedFiles = [];
-        editingMessageIndex = null;
+        editingMessageId = null;
         renderAttachedFiles();
         cancelEditBtn.classList.add('hidden');
         sendBtn.textContent = '▶️';
@@ -531,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clearChatBtn.addEventListener('click', async () => {
         if (confirm('Are you sure you want to clear the chat?')) {
             await window.chatAPI.clearMessages();
-            await renderMessages();
+            chatView.clear();
         }
     });
 
@@ -581,7 +477,8 @@ document.addEventListener('DOMContentLoaded', () => {
             modelNickname.textContent = 'No Model';
             sendBtn.disabled = true;
         }
-        await renderMessages();
+        const messages = await window.chatAPI.getMessages();
+        chatView.renderMessages(messages);
     };
     init();
 });
