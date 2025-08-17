@@ -9,8 +9,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <link rel="icon" type="image/x-icon" href="/dumbllmchat/images/icon-512x512.png">
-  <script type="module" crossorigin src="/dumbllmchat/assets/index-CRlTF1Cc.js"></script>
-  <link rel="stylesheet" crossorigin href="/dumbllmchat/assets/index-Dafm7sS2.css">
+  <script type="module" crossorigin src="/dumbllmchat/assets/index-DP2pzxXS.js"></script>
+  <link rel="stylesheet" crossorigin href="/dumbllmchat/assets/index-9ucMxK7a.css">
 <link rel="manifest" href="/dumbllmchat/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/dumbllmchat/registerSW.js"></script></head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col h-dvh">
 
@@ -34,9 +34,16 @@
         <div id="resize-handle" class="w-full h-4 bg-gray-200 dark:bg-gray-700 cursor-row-resize flex justify-center items-center flex-shrink-0" touch-action="none">
             <div class="w-10 h-1 bg-gray-400 dark:bg-gray-500 rounded-full"></div>
         </div>
-        <div class="p-4 flex-grow flex items-center">
-            <textarea id="message-input" class="w-full h-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 resize-none" placeholder="Type a message..."></textarea>
-            <button id="send-btn" class="ml-2 text-2xl self-center">▶️</button>
+        <div class="flex-grow flex">
+            <div class="flex-grow flex flex-col p-4">
+                <div id="attached-files-container" class="overflow-y-auto p-2 space-y-2"></div>
+                <textarea id="message-input" class="w-full flex-grow p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 resize-none" placeholder="Type a message..."></textarea>
+            </div>
+            <div class="flex flex-col justify-center ml-2 p-4">
+                <button id="cancel-edit-btn" class="text-2xl hidden">❌</button>
+                <button id="attach-file-btn" class="text-2xl">📎</button>
+                <button id="send-btn" class="text-2xl">▶️</button>
+            </div>
         </div>
     </footer>
 
