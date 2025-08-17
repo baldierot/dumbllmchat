@@ -14,7 +14,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        mode: 'development'
+        mode: 'development',
+        skipWaiting: true,
+        clientsClaim: true,
       },
       manifest: {
         name: 'Dumb LLM Chat',
