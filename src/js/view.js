@@ -1,3 +1,4 @@
+
 class ChatView {
     constructor(chatContainer) {
         this.chatContainer = chatContainer;
@@ -68,6 +69,7 @@ class ChatView {
                 fileElement.className = 'flex items-center bg-gray-200 dark:bg-gray-600 rounded-lg p-2';
                 const fileName = document.createElement('span');
                 fileName.className = 'mr-2 text-gray-800 dark:text-gray-200';
+                fileName.style.wordBreak = 'break-all';
                 fileName.textContent = file.name;
                 fileElement.appendChild(fileName);
 
