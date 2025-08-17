@@ -16,8 +16,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportSettingsBtn = document.getElementById('export-settings-btn');
     const copyChatBtn = document.getElementById('copy-chat-btn');
     const footer = document.querySelector('footer');
+    const attachFileBtn = document.getElementById('attach-file-btn');
+    const attachedFilesContainer = document.getElementById('attached-files-container');
+    const cancelEditBtn = document.getElementById('cancel-edit-btn');
 
     let selectedMessage = null;
+    let attachedFiles = [];
+    let editingMessageIndex = null;
 
     document.addEventListener('click', (e) => {
         const controls = document.querySelector('.message-controls');
@@ -31,10 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    const renderMessages = () => {
+    const renderMessages = async () => {
         chatContainer.innerHTML = '';
         let lastMessageElement = null;
-        window.chatAPI.getMessages().forEach((msg, index) => {
+        const messages = await window.chatAPI.getMessages();
+        messages.forEach((msg, index) => {
             const messageElement = createMessageElement(msg, index);
             chatContainer.appendChild(messageElement);
             lastMessageElement = messageElement;
@@ -61,6 +67,32 @@ document.addEventListener('DOMContentLoaded', () => {
         messageContent.className = 'message-content';
         messageContent.innerHTML = marked.parse(msg.content, { breaks: true });
         div.appendChild(messageContent);
+
+        if (msg.files && msg.files.length > 0) {
+            const filesContainer = document.createElement('div');
+            filesContainer.className = 'flex flex-wrap gap-2 mt-2';
+            msg.files.forEach(file => {
+                const fileElement = document.createElement('div');
+                fileElement.className = 'flex items-center bg-gray-200 dark:bg-gray-600 rounded-lg p-2';
+                const fileName = document.createElement('span');
+                fileName.className = 'mr-2 text-gray-800 dark:text-gray-200';
+                fileName.textContent = file.name;
+                fileElement.appendChild(fileName);
+
+                const downloadBtn = document.createElement('button');
+                downloadBtn.textContent = '⬇️';
+                downloadBtn.className = 'download-file-btn';
+                downloadBtn.addEventListener('click', () => {
+                    const a = document.createElement('a');
+                    a.href = file.data;
+                    a.download = file.name;
+                    a.click();
+                });
+                fileElement.appendChild(downloadBtn);
+                filesContainer.appendChild(fileElement);
+            });
+            div.appendChild(filesContainer);
+        }
 
         div.dataset.index = index;
 
@@ -116,70 +148,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return div;
     };
 
-    const showMessageControls = (messageElement, x, y) => {
+    const showMessageControls = async (messageElement, x, y) => {
         const controls = document.createElement('div');
         controls.className = 'message-controls absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2 flex space-x-2';
 
         const editBtn = document.createElement('button');
         editBtn.textContent = '✏️';
-        editBtn.addEventListener('click', () => {
+        editBtn.addEventListener('click', async () => {
             const index = messageElement.dataset.index;
-            const messageContent = messageElement.querySelector('.message-content');
-            const originalContent = window.chatAPI.getMessages()[index].content;
-
-            const editContainer = document.createElement('div');
-            editContainer.className = 'w-full';
-
-            const textarea = document.createElement('textarea');
-            textarea.className = `w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 resize-y text-black dark:text-white min-h-[${messageElement.offsetHeight}px]`;
-            textarea.value = originalContent;
-            
-            const saveBtn = document.createElement('button');
-            saveBtn.textContent = 'Save';
-            saveBtn.className = 'bg-blue-500 text-white px-4 py-2 rounded-lg mt-2';
-            
-            const cancelBtn = document.createElement('button');
-            cancelBtn.textContent = 'Cancel';
-            cancelBtn.className = 'bg-gray-500 text-white px-4 py-2 rounded-lg mt-2 ml-2';
-
-            editContainer.appendChild(textarea);
-            editContainer.appendChild(saveBtn);
-            editContainer.appendChild(cancelBtn);
-
-            messageContent.innerHTML = '';
-            messageContent.appendChild(editContainer);
-            textarea.focus();
-
-            editContainer.addEventListener('keydown', (e) => {
-                if (e.ctrlKey && e.key === 'Enter') {
-                    e.preventDefault();
-                    saveBtn.click();
-                }
-            });
-
-            saveBtn.addEventListener('click', () => {
-                const newContent = textarea.value;
-                if (newContent) {
-                    window.chatAPI.updateMessage(index, newContent);
-                    const newMessageElement = createMessageElement(window.chatAPI.getMessages()[index], index);
-                    messageElement.replaceWith(newMessageElement);
-                }
-            });
-
-            cancelBtn.addEventListener('click', () => {
-                const originalMessageElement = createMessageElement(window.chatAPI.getMessages()[index], index);
-                messageElement.replaceWith(originalMessageElement);
-            });
-
+            const messages = await window.chatAPI.getMessages();
+            const message = messages[index];
+            messageInput.value = message.content;
+            attachedFiles = message.files || [];
+            editingMessageIndex = index;
+            renderAttachedFiles();
+            cancelEditBtn.classList.remove('hidden');
+            sendBtn.textContent = '💾';
             removeMessageControls();
+            messageInput.focus();
         });
 
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = '🗑️';
-        deleteBtn.addEventListener('click', () => {
+        deleteBtn.addEventListener('click', async () => {
             if (confirm('Are you sure you want to delete this message?')) {
-                window.chatAPI.removeMessage(messageElement.dataset.index);
-                renderMessages();
+                await window.chatAPI.removeMessage(messageElement.dataset.index);
+                await renderMessages();
             }
             removeMessageControls();
         });
@@ -199,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
         regenerateBtn.textContent = '🔄️';
         regenerateBtn.addEventListener('click', async () => {
             const index = parseInt(messageElement.dataset.index);
-            const messages = window.chatAPI.getMessages();
+            const messages = await window.chatAPI.getMessages();
             const clickedMessage = messages[index];
 
             let newMessages;
@@ -210,8 +204,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             window.chatAPI.messages = newMessages;
-            window.chatAPI.saveMessages();
-            renderMessages();
+            await window.db.clearMessages();
+            for (const msg of newMessages) {
+                await window.db.addMessage(msg);
+            }
+            await renderMessages();
 
             const lastMessage = newMessages[newMessages.length - 1];
             if (lastMessage && lastMessage.sender === 'User') {
@@ -228,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 chatContainer.removeChild(pendingDiv);
 
                 if (response) {
-                    renderMessages();
+                    await renderMessages();
                 }
                 sendBtn.disabled = false;
                 messageInput.focus();
@@ -387,31 +384,99 @@ document.addEventListener('DOMContentLoaded', () => {
         modelNickname.textContent = window.chatAPI.getCurrentModel().nickname;
     });
 
+    const renderAttachedFiles = () => {
+        attachedFilesContainer.innerHTML = '';
+        attachedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'attached-file-item';
+            const fileName = document.createElement('span');
+            fileName.textContent = file.name;
+            fileItem.appendChild(fileName);
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-file-btn';
+            removeBtn.textContent = '❌';
+            removeBtn.addEventListener('click', () => {
+                attachedFiles.splice(index, 1);
+                renderAttachedFiles();
+            });
+            fileItem.appendChild(removeBtn);
+            attachedFilesContainer.appendChild(fileItem);
+        });
+
+        const contentContainer = footer.querySelector('.flex-grow');
+        const messageInputMinHeight = 90;
+        const contentHeight = contentContainer.scrollHeight;
+        const minHeight = contentHeight - messageInput.offsetHeight + messageInputMinHeight;
+        if (footer.offsetHeight < minHeight) {
+            footer.style.height = `${minHeight}px`;
+        }
+    };
+
+    attachFileBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.addEventListener('change', (e) => {
+            const files = e.target.files;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    attachedFiles.push({ name: file.name, type: file.type, data: e.target.result });
+                    renderAttachedFiles();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        input.click();
+    });
+
     sendBtn.addEventListener('click', async () => {
         const content = messageInput.value.trim();
-        if (content) {
-            messageInput.value = '';
-            sendBtn.disabled = true;
+        if (content || attachedFiles.length > 0) {
+            if (editingMessageIndex !== null) {
+                await window.chatAPI.updateMessage(editingMessageIndex, content, attachedFiles);
+                editingMessageIndex = null;
+                cancelEditBtn.classList.add('hidden');
+                sendBtn.textContent = '▶️';
+                messageInput.value = '';
+                attachedFiles = [];
+                renderAttachedFiles();
+                await renderMessages();
+            } else {
+                const userMessage = { sender: 'User', content, files: attachedFiles };
+                await window.chatAPI.addMessage(userMessage);
+                messageInput.value = '';
+                attachedFiles = [];
+                renderAttachedFiles();
+                await renderMessages();
 
-            const userMessage = { sender: 'User', content };
-            window.chatAPI.addMessage(userMessage);
-            renderMessages();
+                sendBtn.disabled = true;
+                const pendingMessage = { sender: 'Assistant', content: '...' };
+                const pendingDiv = createMessageElement(pendingMessage, -1);
+                chatContainer.appendChild(pendingDiv);
+                pendingDiv.scrollIntoView({ behavior: 'smooth' });
 
-            const pendingMessage = { sender: 'Assistant', content: '...' };
-            const pendingDiv = createMessageElement(pendingMessage, -1);
-            chatContainer.appendChild(pendingDiv);
-            pendingDiv.scrollIntoView({ behavior: 'smooth' });
+                const response = await window.chatAPI.sendMessage(await window.chatAPI.getMessages());
 
-            const response = await window.chatAPI.sendMessage(window.chatAPI.getMessages());
+                chatContainer.removeChild(pendingDiv);
 
-            chatContainer.removeChild(pendingDiv);
-
-            if (response) {
-                renderMessages();
+                if (response) {
+                    await renderMessages();
+                }
+                sendBtn.disabled = false;
+                // messageInput.focus();
             }
-            sendBtn.disabled = false;
-            // messageInput.focus();
         }
+    });
+
+    cancelEditBtn.addEventListener('click', () => {
+        messageInput.value = '';
+        attachedFiles = [];
+        editingMessageIndex = null;
+        renderAttachedFiles();
+        cancelEditBtn.classList.add('hidden');
+        sendBtn.textContent = '▶️';
     });
 
     messageInput.addEventListener('keydown', (e) => {
@@ -433,10 +498,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const clientY = e.clientY || (e.touches && e.touches[0].clientY);
             if (clientY === undefined) return;
             const newHeight = window.innerHeight - clientY;
-            const minHeight = 140; // Minimum height for the footer
+
+            const contentContainer = footer.querySelector('.flex-grow');
+            const messageInputMinHeight = 90;
+            const contentHeight = contentContainer.scrollHeight;
+            const minHeight = contentHeight - messageInput.offsetHeight + messageInputMinHeight;
+
             const maxHeight = 500; // Maximum height for the footer
+
             if (newHeight >= minHeight && newHeight <= maxHeight) {
                 footer.style.height = `${newHeight}px`;
+            } else if (newHeight < minHeight) {
+                footer.style.height = `${minHeight}px`;
             }
         }
     };
@@ -455,10 +528,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('touchmove', doResize);
     document.addEventListener('touchend', stopResize);
 
-    clearChatBtn.addEventListener('click', () => {
+    clearChatBtn.addEventListener('click', async () => {
         if (confirm('Are you sure you want to clear the chat?')) {
-            window.chatAPI.clearMessages();
-            renderMessages();
+            await window.chatAPI.clearMessages();
+            await renderMessages();
         }
     });
 
@@ -500,12 +573,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
 
     // Initial Render
-    const currentModel = window.chatAPI.getCurrentModel();
-    if (currentModel) {
-        modelNickname.textContent = currentModel.nickname;
-    } else {
-        modelNickname.textContent = 'No Model';
-        sendBtn.disabled = true;
-    }
-    renderMessages();
+    const init = async () => {
+        const currentModel = window.chatAPI.getCurrentModel();
+        if (currentModel) {
+            modelNickname.textContent = currentModel.nickname;
+        } else {
+            modelNickname.textContent = 'No Model';
+            sendBtn.disabled = true;
+        }
+        await renderMessages();
+    };
+    init();
 });

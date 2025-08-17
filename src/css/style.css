@@ -1,5 +1,3 @@
-
-
 .code-block-container {
     border: 1px solid #4a5568;
     border-radius: 0.25rem;
@@ -36,4 +34,36 @@ pre {
 code:not(pre > code) {
     white-space: pre-wrap;
     word-wrap: break-word;
+}
+
+#attached-files-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem;
+}
+
+.attached-file-item {
+    display: flex;
+    align-items: center;
+    background-color: #e2e8f0;
+    dark:background-color: #4a5568;
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.attached-file-item span {
+    max-width: 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.remove-file-btn {
+    margin-left: 0.5rem;
+    cursor: pointer;
+}
+.download-file-btn {
+    cursor: pointer;
+    margin-left: auto;
 }

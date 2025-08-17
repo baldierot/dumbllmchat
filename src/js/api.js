@@ -1,8 +1,13 @@
 class ChatAPI {
     constructor() {
         this.models = this.getModels();
-        this.messages = this.getMessages();
+        this.messages = [];
         this.currentModelIndex = this.getCurrentModelIndex();
+        this.init();
+    }
+
+    async init() {
+        this.messages = await window.db.getMessages();
     }
 
     getModels() {
@@ -89,33 +94,34 @@ class ChatAPI {
         localStorage.setItem('current_model_index', this.currentModelIndex);
     }
 
-    getMessages() {
-        const messages = localStorage.getItem('chat_messages');
-        return messages ? JSON.parse(messages) : [];
+    async getMessages() {
+        this.messages = await window.db.getMessages();
+        return this.messages;
     }
 
-    saveMessages() {
-        localStorage.setItem('chat_messages', JSON.stringify(this.messages));
+    async addMessage(message) {
+        const id = await window.db.addMessage(message);
+        this.messages.push({ ...message, id });
     }
 
-    addMessage(message) {
-        this.messages.push(message);
-        this.saveMessages();
+    async updateMessage(index, content, files) {
+        const message = this.messages[index];
+        message.content = content;
+        if (files) {
+            message.files = files;
+        }
+        await window.db.updateMessage(message);
     }
 
-    updateMessage(index, content) {
-        this.messages[index].content = content;
-        this.saveMessages();
-    }
-
-    removeMessage(index) {
+    async removeMessage(index) {
+        const message = this.messages[index];
+        await window.db.removeMessage(message.id);
         this.messages.splice(index, 1);
-        this.saveMessages();
     }
 
-    clearMessages() {
+    async clearMessages() {
+        await window.db.clearMessages();
         this.messages = [];
-        this.saveMessages();
     }
 
     async sendMessage(messages) {
@@ -126,10 +132,23 @@ class ChatAPI {
         let fetchEndpoint = endpoint;
 
         if (apiSchema === 'google') {
-            const googleMessages = messages.map(msg => ({
-                role: msg.sender === 'User' ? 'user' : 'model',
-                parts: [{ text: msg.content }]
-            }));
+            const googleMessages = messages.map(msg => {
+                const parts = [{ text: msg.content }];
+                if (msg.files) {
+                    msg.files.forEach(file => {
+                        parts.push({
+                            inline_data: {
+                                mime_type: file.type,
+                                data: file.data.split(',')[1]
+                            }
+                        });
+                    });
+                }
+                return {
+                    role: msg.sender === 'User' ? 'user' : 'model',
+                    parts: parts
+                };
+            });
 
             if (prependSystemPrompt) {
                 const lastMessage = googleMessages[googleMessages.length - 1];
@@ -203,10 +222,23 @@ class ChatAPI {
             } else {
                 apiMessages = [
                     { role: 'system', content: system_prompt },
-                    ...messages.map(msg => ({
-                        role: msg.sender.toLowerCase(),
-                        content: msg.content
-                    }))
+                    ...messages.map(msg => {
+                        const content = [{ type: 'text', text: msg.content }];
+                        if (msg.files) {
+                            msg.files.forEach(file => {
+                                content.push({
+                                    type: 'image_url',
+                                    image_url: {
+                                        url: file.data
+                                    }
+                                });
+                            });
+                        }
+                        return {
+                            role: msg.sender.toLowerCase(),
+                            content: content
+                        }
+                    })
                 ];
             }
 
