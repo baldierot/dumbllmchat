@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let attachedFiles = [];
     let editingMessageId = null;
     let selectedMessage = null;
+    let initialFooterHeight = footer.offsetHeight;
 
     const chatView = new window.ChatView(chatContainer);
 
@@ -393,20 +394,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (resizing) {
             const clientY = e.clientY || (e.touches && e.touches[0].clientY);
             if (clientY === undefined) return;
-            const newHeight = window.innerHeight - clientY;
+            let newHeight = window.innerHeight - clientY;
 
-            const contentContainer = footer.querySelector('.flex-grow');
-            const messageInputMinHeight = 90;
-            const contentHeight = contentContainer.scrollHeight;
-            const minHeight = contentHeight - messageInput.offsetHeight + messageInputMinHeight;
-
+            const minHeight = initialFooterHeight + attachedFilesContainer.offsetHeight;
             const maxHeight = 500; // Maximum height for the footer
 
-            if (newHeight >= minHeight && newHeight <= maxHeight) {
-                footer.style.height = `${newHeight}px`;
-            } else if (newHeight < minHeight) {
-                footer.style.height = `${minHeight}px`;
+            if (newHeight < minHeight) {
+                newHeight = minHeight;
             }
+
+            if (newHeight > maxHeight) {
+                newHeight = maxHeight;
+            }
+
+            footer.style.height = `${newHeight}px`;
         }
     };
 

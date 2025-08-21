@@ -67,3 +67,7 @@ code:not(pre > code) {
     cursor: pointer;
     margin-left: auto;
 }
+
+#resize-handle {
+    touch-action: none;
+}
