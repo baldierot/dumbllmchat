@@ -20,6 +20,7 @@
             <div>
                 <button id="clear-chat-btn" class="text-2xl mr-2">🗑️</button>
                 <button id="copy-chat-btn" class="text-2xl mr-2">📋</button>
+                <button id="history-btn" class="text-2xl mr-2">📜</button>
                 <button id="settings-btn" class="text-2xl">⚙️</button>
             </div>
         </div>
@@ -64,6 +65,23 @@
                 <button type="submit" id="save-settings-btn" class="text-2xl">💾</button>
             </div>
             <button id="close-settings-btn" class="absolute top-2 right-2 text-2xl">❌</button>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full h-full relative flex flex-col">
+            <h2 class="text-2xl font-bold mb-4">Chat History</h2>
+            <div id="conversations-container" class="flex-grow overflow-y-auto"></div>
+            <div class="flex justify-between mt-4">
+                <button type="button" id="add-conversation-btn" class="text-2xl">➕</button>
+                <div>
+                    <button type="button" id="load-conversation-btn" class="text-2xl" disabled>✅</button>
+                    <button type="button" id="rename-conversation-btn" class="text-2xl" disabled>✏️</button>
+                    <button type="button" id="delete-conversation-btn" class="text-2xl" disabled>🗑️</button>
+                </div>
+            </div>
+            <button id="close-history-btn" class="absolute top-2 right-2 text-2xl">❌</button>
         </div>
     </div>
 

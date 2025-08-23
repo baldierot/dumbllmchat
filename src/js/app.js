@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cycleModelBtn = document.getElementById('cycle-model-btn');
     const modelNickname = document.getElementById('model-nickname');
     const settingsBtn = document.getElementById('settings-btn');
+    const historyBtn = document.getElementById('history-btn');
     const chatContainer = document.getElementById('chat-container');
     const resizeHandle = document.getElementById('resize-handle');
     const messageInput = document.getElementById('message-input');
@@ -11,6 +12,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const addModelBtn = document.getElementById('add-model-btn');
     const saveSettingsBtn = document.getElementById('save-settings-btn');
     const closeSettingsBtn = document.getElementById('close-settings-btn');
+    const historyModal = document.getElementById('history-modal');
+    const conversationsContainer = document.getElementById('conversations-container');
+    const addConversationBtn = document.getElementById('add-conversation-btn');
+    const renameConversationBtn = document.getElementById('rename-conversation-btn');
+    const deleteConversationBtn = document.getElementById('delete-conversation-btn');
+    const loadConversationBtn = document.getElementById('load-conversation-btn');
+    const closeHistoryBtn = document.getElementById('close-history-btn');
     const clearChatBtn = document.getElementById('clear-chat-btn');
     const importSettingsBtn = document.getElementById('import-settings-btn');
     const exportSettingsBtn = document.getElementById('export-settings-btn');
@@ -23,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let attachedFiles = [];
     let editingMessageId = null;
     let selectedMessage = null;
+    let selectedConversationId = null;
     let initialFooterHeight = footer.offsetHeight;
 
     const chatView = new window.ChatView(chatContainer);
@@ -102,10 +111,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 newMessages = messages.slice(0, messageIndex);
             }
 
-            window.chatAPI.messages = newMessages;
-            await window.db.clearMessages();
+            // Clear only the messages of the current conversation
+            await window.chatAPI.clearMessages();
+            // Add back the messages that we want to keep
             for (const msg of newMessages) {
-                await window.db.addMessage(msg);
+                await window.chatAPI.addMessage(msg);
             }
             
             const scrollTop = chatContainer.scrollTop;
@@ -171,6 +181,137 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedMessage = null;
         }
     };
+
+    const renderConversations = async () => {
+        const conversations = await window.chatAPI.getConversations();
+        conversations.reverse(); // Reverse the order of conversations
+        conversationsContainer.innerHTML = '';
+        selectedConversationId = null;
+        renameConversationBtn.disabled = true;
+        deleteConversationBtn.disabled = true;
+        loadConversationBtn.disabled = true;
+
+        for (const conversation of conversations) {
+            const conversationLi = document.createElement('li');
+            conversationLi.className = 'p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700';
+            conversationLi.dataset.id = conversation.id;
+
+            const conversationName = document.createElement('span');
+            conversationName.className = 'truncate';
+            let title = conversation.name;
+            if (!title) {
+                const messages = await window.db.getMessages(conversation.id);
+                if (messages.length > 0) {
+                    title = messages[0].content.split('\n')[0];
+                } else {
+                    title = 'New Conversation';
+                }
+            }
+            conversationName.textContent = title;
+            conversationLi.appendChild(conversationName);
+
+            conversationLi.addEventListener('click', () => {
+                if (selectedConversationId !== null) {
+                    const previousSelected = conversationsContainer.querySelector(`[data-id='${selectedConversationId}']`);
+                    if (previousSelected) {
+                        previousSelected.classList.remove('selected');
+                    }
+                }
+                conversationLi.classList.add('selected');
+                selectedConversationId = conversation.id;
+                renameConversationBtn.disabled = false;
+                deleteConversationBtn.disabled = false;
+                loadConversationBtn.disabled = false;
+                conversationLi.scrollIntoView({ block: 'nearest' });
+            });
+
+            conversationsContainer.appendChild(conversationLi);
+        }
+
+        const currentConversationLi = conversationsContainer.querySelector(`[data-id='${window.chatAPI.currentConversationId}']`);
+        if (currentConversationLi) {
+            currentConversationLi.classList.add('selected');
+            selectedConversationId = window.chatAPI.currentConversationId;
+            renameConversationBtn.disabled = false;
+            deleteConversationBtn.disabled = false;
+            loadConversationBtn.disabled = false;
+            setTimeout(() => {
+                currentConversationLi.scrollIntoView({ block: 'nearest' });
+            }, 0);
+        }
+    };
+
+    historyBtn.addEventListener('click', async () => {
+        await renderConversations();
+        historyModal.classList.remove('hidden');
+    });
+
+    closeHistoryBtn.addEventListener('click', () => {
+        historyModal.classList.add('hidden');
+    });
+
+    addConversationBtn.addEventListener('click', async () => {
+        const newConversation = await window.chatAPI.addConversation({ name: 'New Conversation', timestamp: Date.now() });
+        await window.chatAPI.switchConversation(newConversation.id);
+        chatView.clear();
+        await renderConversations();
+    });
+
+    loadConversationBtn.addEventListener('click', async () => {
+        if (selectedConversationId !== null) {
+            await window.chatAPI.switchConversation(selectedConversationId);
+            const messages = await window.chatAPI.getMessages();
+            chatView.renderMessages(messages);
+            historyModal.classList.add('hidden');
+        }
+    });
+
+    renameConversationBtn.addEventListener('click', async () => {
+        if (selectedConversationId !== null) {
+            const conversation = window.chatAPI.conversations.find(c => c.id === selectedConversationId);
+            const newName = prompt('Enter new conversation name:', conversation.name);
+            if (newName && newName.trim() !== '') {
+                conversation.name = newName;
+                await window.chatAPI.updateConversation(conversation);
+                const renamedConversationId = selectedConversationId;
+                await renderConversations();
+                const renamedConversationLi = conversationsContainer.querySelector(`[data-id='${renamedConversationId}']`);
+                if (renamedConversationLi) {
+                    setTimeout(() => {
+                        renamedConversationLi.click();
+                        renamedConversationLi.scrollIntoView({ block: 'nearest' });
+                    }, 0);
+                }
+            }
+        }
+    });
+
+    deleteConversationBtn.addEventListener('click', async () => {
+        if (selectedConversationId !== null && confirm('Are you sure you want to delete this conversation?')) {
+            let conversations = await window.chatAPI.getConversations();
+            conversations.reverse();
+            const deletedConversationIndex = conversations.findIndex(c => c.id === selectedConversationId);
+
+            await window.chatAPI.deleteConversation(selectedConversationId);
+
+            let updatedConversations = await window.chatAPI.getConversations();
+            updatedConversations.reverse();
+
+            if (updatedConversations.length > 0) {
+                let nextConversationIndex = deletedConversationIndex;
+                if (nextConversationIndex >= updatedConversations.length) {
+                    nextConversationIndex = updatedConversations.length - 1;
+                }
+                await window.chatAPI.switchConversation(updatedConversations[nextConversationIndex].id);
+            } else {
+                await window.chatAPI.addConversation({ name: 'New Conversation', timestamp: Date.now() });
+            }
+
+            const messages = await window.chatAPI.getMessages();
+            chatView.renderMessages(messages);
+            await renderConversations();
+        }
+    });
 
     const renderLlmConfigs = () => {
         llmConfigsContainer.innerHTML = '';
@@ -471,6 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial Render
     const init = async () => {
+        await window.chatAPI.init();
         const currentModel = window.chatAPI.getCurrentModel();
         if (currentModel) {
             modelNickname.textContent = currentModel.nickname;

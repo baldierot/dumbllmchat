@@ -2,12 +2,69 @@ class ChatAPI {
     constructor() {
         this.models = this.getModels();
         this.messages = [];
+        this.conversations = [];
+        this.currentConversationId = null;
         this.currentModelIndex = this.getCurrentModelIndex();
         this.init();
     }
 
     async init() {
-        this.messages = await window.db.getMessages();
+        this.conversations = await window.db.getConversations();
+        this.currentConversationId = this.getCurrentConversationId();
+        if (!this.currentConversationId && this.conversations.length > 0) {
+            this.currentConversationId = this.conversations[0].id;
+            this.saveCurrentConversationId();
+        }
+        if (this.currentConversationId) {
+            this.messages = await this.getMessages();
+        }
+    }
+
+    getCurrentConversationId() {
+        return parseInt(localStorage.getItem('current_conversation_id'));
+    }
+
+    saveCurrentConversationId() {
+        localStorage.setItem('current_conversation_id', this.currentConversationId);
+    }
+
+    async getConversations() {
+        this.conversations = await window.db.getConversations();
+        return this.conversations;
+    }
+
+    async addConversation(conversation) {
+        const id = await window.db.addConversation(conversation);
+        const newConversation = { ...conversation, id };
+        this.conversations.push(newConversation);
+        return newConversation;
+    }
+
+    async updateConversation(conversation) {
+        await window.db.updateConversation(conversation);
+        const index = this.conversations.findIndex(c => c.id === conversation.id);
+        if (index !== -1) {
+            this.conversations[index] = conversation;
+        }
+    }
+
+    async deleteConversation(id) {
+        await window.db.deleteConversation(id);
+        this.conversations = this.conversations.filter(c => c.id !== id);
+        if (this.currentConversationId === id) {
+            if (this.conversations.length > 0) {
+                this.currentConversationId = this.conversations[0].id;
+            } else {
+                this.currentConversationId = null;
+            }
+            this.saveCurrentConversationId();
+        }
+    }
+
+    async switchConversation(id) {
+        this.currentConversationId = id;
+        this.saveCurrentConversationId();
+        this.messages = await this.getMessages();
     }
 
     getModels() {
@@ -95,18 +152,25 @@ class ChatAPI {
     }
 
     async getMessages() {
-        this.messages = await window.db.getMessages();
+        if (!this.currentConversationId) return [];
+        this.messages = await window.db.getMessages(this.currentConversationId);
         return this.messages;
     }
 
     async getMessage(id) {
-        this.messages = await window.db.getMessages();
+        // This might need to be updated to fetch from the correct conversation if messages are not already loaded
         return this.messages.find(m => m.id === id);
     }
 
     async addMessage(message) {
-        const id = await window.db.addMessage(message);
-        const newMessage = { ...message, id };
+        if (!this.currentConversationId) {
+            const newConversation = await this.addConversation({ name: 'New Conversation', timestamp: Date.now() });
+            this.currentConversationId = newConversation.id;
+            this.saveCurrentConversationId();
+        }
+        const messageWithConversation = { ...message, conversationId: this.currentConversationId };
+        const id = await window.db.addMessage(messageWithConversation);
+        const newMessage = { ...messageWithConversation, id };
         this.messages.push(newMessage);
         return newMessage;
     }
@@ -127,7 +191,8 @@ class ChatAPI {
     }
 
     async clearMessages() {
-        await window.db.clearMessages();
+        if (!this.currentConversationId) return;
+        await window.db.clearMessages(this.currentConversationId);
         this.messages = [];
     }
 
