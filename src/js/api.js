@@ -80,6 +80,7 @@ class ChatAPI {
                 "system_prompt": "You are a helpful assistant.",
                 "apiSchema": "google",
                 "useGoogleSearch": true,
+                "useUrlContext": false,
                 "prependSystemPrompt": false,
                 "thinkingBudget": 24576
             },
@@ -93,6 +94,7 @@ class ChatAPI {
                 "system_prompt": "You are a helpful assistant.",
                 "apiSchema": "google",
                 "useGoogleSearch": true,
+                "useUrlContext": false,
                 "prependSystemPrompt": false,
                 "thinkingBudget": 24576
             },
@@ -106,6 +108,7 @@ class ChatAPI {
                 "system_prompt": "You are a helpful assistant.",
                 "apiSchema": "google",
                 "useGoogleSearch": true,
+                "useUrlContext": false,
                 "prependSystemPrompt": false,
                 "thinkingBudget": 32768
             }
@@ -198,7 +201,7 @@ class ChatAPI {
 
     async sendMessage(messages) {
         const currentModel = this.getCurrentModel();
-        const { endpoint, apiKey, model, temperature, system_prompt, apiSchema, useGoogleSearch, maxOutputTokens, prependSystemPrompt, thinkingBudget } = currentModel;
+        const { endpoint, apiKey, model, temperature, system_prompt, apiSchema, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget } = currentModel;
 
         let requestBody;
         let fetchEndpoint = endpoint;
@@ -265,12 +268,15 @@ class ChatAPI {
                 };
             }
 
+            const tools = [];
             if (useGoogleSearch) {
-                requestBody.tools = [
-                    {
-                        "google_search": {}
-                    }
-                ];
+                tools.push({ "google_search": {} });
+            }
+            if (useUrlContext) {
+                tools.push({ "url_context": {} });
+            }
+            if (tools.length > 0) {
+                requestBody.tools = tools;
             }
 
             if (thinkingBudget) {

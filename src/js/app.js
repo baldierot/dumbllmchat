@@ -346,6 +346,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="checkbox" id="prepend-system-prompt-checkbox-${index}" class="mr-2" ${model.prependSystemPrompt ? 'checked' : ''}>
                         <label for="prepend-system-prompt-checkbox-${index}">Prepend System Prompt</label>
                     </div>
+                    <div class="flex items-center mt-2">
+                        <input type="checkbox" id="url-context-checkbox-${index}" class="mr-2" ${model.useUrlContext ? 'checked' : ''}>
+                        <label for="url-context-checkbox-${index}">Enable URL Context</label>
+                    </div>
                 </div>
             `;
             llmConfigsContainer.appendChild(configDiv);
@@ -416,6 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 system_prompt: configDiv.querySelector('textarea').value,
                 apiSchema: configDiv.querySelector('.api-schema').value,
                 useGoogleSearch: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[id^="google-search-checkbox-"]').checked : false,
+                useUrlContext: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[id^="url-context-checkbox-"]').checked : false,
                 prependSystemPrompt: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[id^="prepend-system-prompt-checkbox-"]').checked : false,
                 thinkingBudget: configDiv.querySelector('.api-schema').value === 'google' ? parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10) : null,
             };
