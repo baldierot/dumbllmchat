@@ -16,7 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const conversationsContainer = document.getElementById('conversations-container');
     const addConversationBtn = document.getElementById('add-conversation-btn');
     const renameConversationBtn = document.getElementById('rename-conversation-btn');
-    const deleteConversationBtn = document.getElementById('delete-conversation-btn');
+        const deleteConversationBtn = document.getElementById('delete-conversation-btn');
+    const importConversationBtn = document.getElementById('import-conversation-btn');
+    const exportConversationBtn = document.getElementById('export-conversation-btn');
     const loadConversationBtn = document.getElementById('load-conversation-btn');
     const closeHistoryBtn = document.getElementById('close-history-btn');
     const clearChatBtn = document.getElementById('clear-chat-btn');
@@ -188,8 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
         conversationsContainer.innerHTML = '';
         selectedConversationId = null;
         renameConversationBtn.disabled = true;
-        deleteConversationBtn.disabled = true;
+                deleteConversationBtn.disabled = true;
         loadConversationBtn.disabled = true;
+        exportConversationBtn.disabled = true;
 
         for (const conversation of conversations) {
             const conversationLi = document.createElement('li');
@@ -220,8 +223,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 conversationLi.classList.add('selected');
                 selectedConversationId = conversation.id;
                 renameConversationBtn.disabled = false;
-                deleteConversationBtn.disabled = false;
+                                deleteConversationBtn.disabled = false;
                 loadConversationBtn.disabled = false;
+                exportConversationBtn.disabled = false;
                 conversationLi.scrollIntoView({ block: 'nearest' });
             });
 
@@ -233,8 +237,9 @@ document.addEventListener('DOMContentLoaded', () => {
             currentConversationLi.classList.add('selected');
             selectedConversationId = window.chatAPI.currentConversationId;
             renameConversationBtn.disabled = false;
-            deleteConversationBtn.disabled = false;
+                        deleteConversationBtn.disabled = false;
             loadConversationBtn.disabled = false;
+            exportConversationBtn.disabled = false;
             setTimeout(() => {
                 currentConversationLi.scrollIntoView({ block: 'nearest' });
             }, 0);
@@ -311,6 +316,51 @@ document.addEventListener('DOMContentLoaded', () => {
             chatView.renderMessages(messages);
             await renderConversations();
         }
+    });
+
+    exportConversationBtn.addEventListener('click', async () => {
+        if (selectedConversationId !== null) {
+                        const conversation = window.chatAPI.conversations.find(c => c.id === selectedConversationId);
+            const messages = await window.db.getMessages(selectedConversationId);
+            const conversationData = { ...conversation, messages };
+
+            let title = conversation.name;
+            if (!title && messages.length > 0) {
+                title = messages[0].content.split('\n')[0];
+            }
+            const sanitizedTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(conversationData, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href",     dataStr);
+            downloadAnchorNode.setAttribute("download", `${sanitizedTitle}.json`);
+            document.body.appendChild(downloadAnchorNode); // required for firefox
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+    });
+
+    importConversationBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = async e => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = async readerEvent => {
+                try {
+                    const content = readerEvent.target.result;
+                    const conversationData = JSON.parse(content);
+                    await window.db.importConversation(conversationData);
+                    await renderConversations();
+                    alert('Conversation imported successfully!');
+                } catch (error) {
+                    alert('Error importing conversation: ' + error.message);
+                }
+            }
+            reader.readAsText(file);
+        }
+        input.click();
     });
 
     const renderLlmConfigs = () => {

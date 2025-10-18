@@ -216,6 +216,17 @@ async function clearMessages(conversationId) {
     });
 }
 
+async function importConversation(conversationData) {
+    const { messages, ...conversation } = conversationData;
+    delete conversation.id;
+    const newConversationId = await addConversation(conversation);
+    for (const message of messages) {
+        delete message.id;
+        message.conversationId = newConversationId;
+        await addMessage(message);
+    }
+}
+
 window.db = {
     getConversations,
     addConversation,
@@ -225,5 +236,6 @@ window.db = {
     addMessage,
     updateMessage,
     removeMessage,
-    clearMessages
+    clearMessages,
+    importConversation
 };
