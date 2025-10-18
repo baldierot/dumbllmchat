@@ -20,6 +20,7 @@ class ChatAPI {
     }
 
     async init() {
+        await this.fetchAndSetModels();
         this.conversations = await window.db.getConversations();
         this.currentConversationId = this.getCurrentConversationId();
         if (!this.currentConversationId && this.conversations.length > 0) {
@@ -83,11 +84,10 @@ class ChatAPI {
                 return models ? JSON.parse(models) : [
             {
                                                 "modelName": "gemini-2.5-flash-lite",
-                "nickname": "flash-latest",
+                "nickname": "flash-lite",
                 "apiKey": "",
                 "temperature": 0.7,
-                "maxOutputTokens": 8192,
-                                "maxTokens": 1048576,
+                "maxOutputTokens": 65536,
                 "proxy": "",
                 "system_prompt": "You are a helpful assistant.",
                 "useGoogleSearch": true,
@@ -97,11 +97,10 @@ class ChatAPI {
             },
                         {
                                                 "modelName": "gemini-2.5-pro",
-                "nickname": "pro-latest",
+                "nickname": "pro",
                 "apiKey": "",
                 "temperature": 0.7,
-                "maxOutputTokens": 8192,
-                                "maxTokens": 1048576,
+                "maxOutputTokens": 65536,
                 "proxy": "",
                 "system_prompt": "You are a helpful assistant.",
                 "useGoogleSearch": true,
@@ -113,9 +112,45 @@ class ChatAPI {
         ];
     }
 
-    saveModels(models) {
-        this.models = models;
-        localStorage.setItem('llm_models', JSON.stringify(models));
+    async fetchModelInfo(model) {
+        const { modelName, apiKey, proxy } = model;
+        const normalizedProxy = normalizeProxyUrl(proxy);
+        const fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}`;
+
+        try {
+            const response = await fetch(fetchEndpoint, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey,
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            });
+
+            if (!response.ok) {
+                return { ...model, maxTokens: 0 };
+            }
+
+            const data = await response.json();
+            return { ...model, maxTokens: data.inputTokenLimit };
+        } catch (error) {
+            return { ...model, maxTokens: 0 };
+        }
+    }
+
+    async fetchAndSetModels() {
+        const models = this.getModels();
+        const modelsWithInfo = await Promise.all(models.map(m => this.fetchModelInfo(m)));
+        this.models = modelsWithInfo;
+    }
+
+    async saveModels(models) {
+        const modelsToSave = models.map(m => {
+            const { maxTokens, ...rest } = m;
+            return rest;
+        });
+        localStorage.setItem('llm_models', JSON.stringify(modelsToSave));
+        await this.fetchAndSetModels();
     }
 
     addModel(model) {
@@ -230,7 +265,8 @@ class ChatAPI {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-goog-api-key': apiKey
+                    'x-goog-api-key': apiKey,
+                    'ngrok-skip-browser-warning': 'true'
                 },
                 body: JSON.stringify(requestBody)
             });
@@ -339,7 +375,8 @@ class ChatAPI {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-goog-api-key': apiKey
+                    'x-goog-api-key': apiKey,
+                    'ngrok-skip-browser-warning': 'true'
                 },
                 body: JSON.stringify(requestBody)
             });

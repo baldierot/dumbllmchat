@@ -415,7 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <input type="text" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
                 <input type="number" step="0.1" value="${model.temperature}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Temperature">
                 <input type="number" value="${model.maxOutputTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Output Tokens">
-                <input type="number" value="${model.maxTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Tokens">
+
                 <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
                 <div class="google-search-container">
                     <div class="flex items-center mt-2">
@@ -467,13 +467,12 @@ document.addEventListener('DOMContentLoaded', () => {
             temperature: 0.7,
                         system_prompt: 'You are a helpful assistant.',
             maxOutputTokens: 8192,
-                        maxTokens: 1000000,
             proxy: ''
         });
         renderLlmConfigs();
     });
 
-    saveSettingsBtn.addEventListener('click', (e) => {
+    saveSettingsBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         const newModels = Array.from(llmConfigsContainer.children).map(configDiv => {
                         return {
@@ -482,7 +481,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 apiKey: configDiv.querySelector('input[placeholder="API Key"]').value,
                 temperature: parseFloat(configDiv.querySelector('input[placeholder="Temperature"]').value),
                                 maxOutputTokens: parseInt(configDiv.querySelector('input[placeholder="Max Output Tokens"]').value, 10),
-                                maxTokens: parseInt(configDiv.querySelector('input[placeholder="Max Tokens"]').value, 10),
                 proxy: configDiv.querySelector('input[placeholder="Proxy URL"]').value,
                 system_prompt: configDiv.querySelector('textarea').value,
                 useGoogleSearch: configDiv.querySelector('input[id^="google-search-checkbox-"]').checked,
@@ -491,7 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 thinkingBudget: parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10),
             };
         });
-                window.chatAPI.saveModels(newModels);
+                await window.chatAPI.saveModels(newModels);
         settingsModal.classList.add('hidden');
         modelNickname.textContent = window.chatAPI.getCurrentModel().nickname;
         updateTokenCountDisplay();
