@@ -405,7 +405,7 @@ class ChatAPI {
         return await this.addMessage(assistantMessage);
     }
 
-    async compressConversation(conversationId, userPrompt) {
+    async compressConversation(conversationId) {
         const conversation = this.conversations.find(c => c.id === conversationId);
         if (!conversation) {
             throw new Error('Conversation not found');
@@ -414,7 +414,7 @@ class ChatAPI {
         const messages = await window.db.getMessages(conversationId);
                 const conversationText = messages.map(m => `${m.sender}: ${m.content}`).join('\n');
 
-        const compressionPrompt = `You are a Specialized Context Preservation and Compression Engine. Your primary goal is to losslessly (or near-losslessly) compress the provided multi-turn conversation history into a single, highly dense, and concise textual block. This block must function as a perfect summary and contextual anchor for a subsequent LLM to pick up the conversation as if it had access to the full original transcript.\n\n${userPrompt}\n\nHere is the conversation:\n\n${conversationText}`;
+        const compressionPrompt = `You are a Specialized Context Preservation and Compression Engine. Your primary goal is to losslessly (or near-losslessly) compress the provided multi-turn conversation history into a single, highly dense, and concise textual block. This block must function as a perfect summary and contextual anchor for a subsequent LLM to pick up the conversation as if it had access to the full original transcript.\n\nHere is the conversation:\n\n${conversationText}`;
 
         const compressedContent = await this._generateContent([
             { sender: 'User', content: compressionPrompt }

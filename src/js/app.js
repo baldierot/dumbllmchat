@@ -336,12 +336,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     compressConversationBtn.addEventListener('click', async () => {
         if (selectedConversationId !== null) {
-            const userPrompt = prompt('Enter a prompt for the compression:', 'Summarize this conversation.');
-            if (userPrompt) {
+            if (confirm('Are you sure you want to compress this conversation?')) {
                 compressConversationBtn.disabled = true;
                 compressConversationBtn.textContent = '📦...';
                 try {
-                    await window.chatAPI.compressConversation(selectedConversationId, userPrompt);
+                    await window.chatAPI.compressConversation(selectedConversationId);
                     await renderConversations();
                 } catch (error) {
                     alert('Error compressing conversation: ' + error.message);
