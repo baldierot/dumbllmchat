@@ -1,3 +1,14 @@
+function normalizeProxyUrl(url) {
+    if (!url) {
+        return '';
+    }
+    let normalizedUrl = url.trim();
+    while (normalizedUrl.endsWith('/')) {
+        normalizedUrl = normalizedUrl.slice(0, -1);
+    }
+    return normalizedUrl ? normalizedUrl + '/' : '';
+}
+
 class ChatAPI {
     constructor() {
         this.models = this.getModels();
@@ -69,43 +80,36 @@ class ChatAPI {
 
     getModels() {
         const models = localStorage.getItem('llm_models');
-        return models ? JSON.parse(models) : [
+                return models ? JSON.parse(models) : [
             {
-                "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
-                "nickname": "flash-lite",
+                                                "modelName": "gemini-2.5-flash-lite",
+                "nickname": "flash-latest",
                 "apiKey": "",
                 "temperature": 0.7,
-                "maxOutputTokens": null,
+                "maxOutputTokens": 8192,
+                                "maxTokens": 1048576,
+                "proxy": "",
                 "system_prompt": "You are a helpful assistant.",
                 "useGoogleSearch": true,
                 "useUrlContext": false,
                 "prependSystemPrompt": false,
                 "thinkingBudget": 24576
             },
-            {
-                "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-                "nickname": "flash",
+                        {
+                                                "modelName": "gemini-2.5-pro",
+                "nickname": "pro-latest",
                 "apiKey": "",
                 "temperature": 0.7,
-                "maxOutputTokens": null,
+                "maxOutputTokens": 8192,
+                                "maxTokens": 1048576,
+                "proxy": "",
                 "system_prompt": "You are a helpful assistant.",
                 "useGoogleSearch": true,
                 "useUrlContext": false,
                 "prependSystemPrompt": false,
                 "thinkingBudget": 24576
             },
-            {
-                "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
-                "nickname": "pro",
-                "apiKey": "",
-                "temperature": 0.7,
-                "maxOutputTokens": null,
-                "system_prompt": "You are a helpful assistant.",
-                "useGoogleSearch": true,
-                "useUrlContext": false,
-                "prependSystemPrompt": false,
-                "thinkingBudget": 32768
-            }
+            
         ];
     }
 
@@ -190,15 +194,67 @@ class ChatAPI {
     async clearMessages() {
         if (!this.currentConversationId) return;
         await window.db.clearMessages(this.currentConversationId);
-        this.messages = [];
+                this.messages = [];
+    }
+
+    async countTokens(messages) {
+        const currentModel = this.getCurrentModel();
+                        const { modelName, apiKey, proxy } = currentModel;
+        const normalizedProxy = normalizeProxyUrl(proxy);
+        const fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}:countTokens`;
+
+        const googleMessages = messages.map(msg => {
+            const parts = [{ text: msg.content }];
+            if (msg.files) {
+                msg.files.forEach(file => {
+                    parts.push({
+                        inline_data: {
+                            mime_type: file.type,
+                            data: file.data.split(',')[1]
+                        }
+                    });
+                });
+            }
+            return {
+                role: msg.sender === 'User' ? 'user' : 'model',
+                parts: parts
+            };
+        });
+
+        const requestBody = {
+            contents: googleMessages
+        };
+
+        try {
+            const response = await fetch(fetchEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
+            }
+
+            const data = await response.json();
+            return data.totalTokens;
+        } catch (error) {
+            console.error('Token count failed:', error);
+            return 0;
+        }
     }
 
     async sendMessage(messages) {
         const currentModel = this.getCurrentModel();
-        const { endpoint, apiKey, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget } = currentModel;
+                                const { modelName, apiKey, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget, proxy } = currentModel;
 
         let requestBody;
-        let fetchEndpoint = endpoint;
+        const normalizedProxy = normalizeProxyUrl(proxy);
+        const fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
         const googleMessages = messages.map(msg => {
             const parts = [{ text: msg.content }];
@@ -272,13 +328,11 @@ class ChatAPI {
             requestBody.tools = tools;
         }
 
-        if (thinkingBudget) {
+                if (thinkingBudget) {
             requestBody.generationConfig.thinkingConfig = {
                 thinkingBudget: thinkingBudget
             }
         }
-
-        fetchEndpoint = endpoint;
 
         try {
             const response = await fetch(fetchEndpoint, {

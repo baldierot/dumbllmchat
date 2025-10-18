@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const cycleModelBtn = document.getElementById('cycle-model-btn');
-    const modelNickname = document.getElementById('model-nickname');
+        const modelNickname = document.getElementById('model-nickname');
+    const tokenCountDisplay = document.getElementById('token-count-display');
     const settingsBtn = document.getElementById('settings-btn');
     const historyBtn = document.getElementById('history-btn');
     const chatContainer = document.getElementById('chat-container');
@@ -136,11 +137,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 chatView.removeMessage(-1);
 
-                if (response) {
+                                if (response) {
                     chatView.appendMessage(response);
                 }
                 sendBtn.disabled = false;
                 messageInput.focus();
+                updateTokenCountDisplay();
             }
         });
 
@@ -179,9 +181,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (controls) {
             controls.remove();
         }
-        if (selectedMessage) {
+                if (selectedMessage) {
             selectedMessage = null;
         }
+    };
+
+    const updateTokenCountDisplay = async () => {
+        const messages = await window.chatAPI.getMessages();
+        const currentTokenCount = await window.chatAPI.countTokens(messages);
+        const currentModel = window.chatAPI.getCurrentModel();
+        tokenCountDisplay.textContent = `${currentTokenCount}/${currentModel.maxTokens}`;
     };
 
     const renderConversations = async () => {
@@ -257,17 +266,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     addConversationBtn.addEventListener('click', async () => {
         const newConversation = await window.chatAPI.addConversation({ name: 'New Conversation', timestamp: Date.now() });
-        await window.chatAPI.switchConversation(newConversation.id);
+                await window.chatAPI.switchConversation(newConversation.id);
         chatView.clear();
         await renderConversations();
+        updateTokenCountDisplay();
     });
 
     loadConversationBtn.addEventListener('click', async () => {
         if (selectedConversationId !== null) {
             await window.chatAPI.switchConversation(selectedConversationId);
-            const messages = await window.chatAPI.getMessages();
+                        const messages = await window.chatAPI.getMessages();
             chatView.renderMessages(messages);
             historyModal.classList.add('hidden');
+            updateTokenCountDisplay();
         }
     });
 
@@ -312,9 +323,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 await window.chatAPI.addConversation({ name: 'New Conversation', timestamp: Date.now() });
             }
 
-            const messages = await window.chatAPI.getMessages();
+                        const messages = await window.chatAPI.getMessages();
             chatView.renderMessages(messages);
             await renderConversations();
+            updateTokenCountDisplay();
         }
     });
 
@@ -369,16 +381,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const configDiv = document.createElement('div');
             configDiv.className = 'mb-4 p-4 border border-black rounded-lg dark:border-black';
             configDiv.innerHTML = `
-                <div class="flex justify-between items-center mb-2">
+                                <div class="flex justify-between items-center mb-2">
                     <h3 class="text-lg font-semibold">${model.nickname}</h3>
                     <button type="button" class="remove-model-btn text-xl" data-index="${index}">➖</button>
                 </div>
-                <input type="text" value="${model.endpoint}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Endpoint URL">
+                <input type="text" value="${model.proxy || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Proxy URL">
+                <input type="text" value="${model.modelName}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Model Name">
                 <input type="text" value="${model.nickname}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nickname">
                 <textarea class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="System Prompt">${model.system_prompt}</textarea>
-                <input type="password" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
+                                <input type="text" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
                 <input type="number" step="0.1" value="${model.temperature}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Temperature">
                 <input type="number" value="${model.maxOutputTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Output Tokens">
+                <input type="number" value="${model.maxTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Tokens">
                 <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
                 <div class="google-search-container">
                     <div class="flex items-center mt-2">
@@ -407,9 +421,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    cycleModelBtn.addEventListener('click', () => {
+        cycleModelBtn.addEventListener('click', () => {
         const newModel = window.chatAPI.cycleModel();
         modelNickname.textContent = newModel.nickname;
+        updateTokenCountDisplay();
     });
 
     settingsBtn.addEventListener('click', () => {
@@ -422,13 +437,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     addModelBtn.addEventListener('click', () => {
-        window.chatAPI.addModel({
-            endpoint: '',
+                window.chatAPI.addModel({
+                                                modelName: 'gemini-2.5-flash-lite',
             apiKey: '',
             nickname: 'New Model',
             temperature: 0.7,
-            system_prompt: 'You are a helpful assistant.',
-            maxOutputTokens: 2048
+                        system_prompt: 'You are a helpful assistant.',
+            maxOutputTokens: 8192,
+                        maxTokens: 1000000,
+            proxy: ''
         });
         renderLlmConfigs();
     });
@@ -436,12 +453,14 @@ document.addEventListener('DOMContentLoaded', () => {
     saveSettingsBtn.addEventListener('click', (e) => {
         e.preventDefault();
         const newModels = Array.from(llmConfigsContainer.children).map(configDiv => {
-            return {
-                endpoint: configDiv.querySelector('input[placeholder="Endpoint URL"]').value,
+                        return {
+                modelName: configDiv.querySelector('input[placeholder="Model Name"]').value,
                 nickname: configDiv.querySelector('input[placeholder="Nickname"]').value,
                 apiKey: configDiv.querySelector('input[placeholder="API Key"]').value,
                 temperature: parseFloat(configDiv.querySelector('input[placeholder="Temperature"]').value),
-                maxOutputTokens: parseInt(configDiv.querySelector('input[placeholder="Max Output Tokens"]').value, 10),
+                                maxOutputTokens: parseInt(configDiv.querySelector('input[placeholder="Max Output Tokens"]').value, 10),
+                                maxTokens: parseInt(configDiv.querySelector('input[placeholder="Max Tokens"]').value, 10),
+                proxy: configDiv.querySelector('input[placeholder="Proxy URL"]').value,
                 system_prompt: configDiv.querySelector('textarea').value,
                 useGoogleSearch: configDiv.querySelector('input[id^="google-search-checkbox-"]').checked,
                 useUrlContext: configDiv.querySelector('input[id^="url-context-checkbox-"]').checked,
@@ -449,9 +468,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 thinkingBudget: parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10),
             };
         });
-        window.chatAPI.saveModels(newModels);
+                window.chatAPI.saveModels(newModels);
         settingsModal.classList.add('hidden');
         modelNickname.textContent = window.chatAPI.getCurrentModel().nickname;
+        updateTokenCountDisplay();
     });
 
     const renderAttachedFiles = () => {
@@ -522,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderAttachedFiles();
 
                 sendBtn.disabled = true;
-                const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
+                                const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
                 chatView.appendMessage(pendingMessage);
 
                 const response = await window.chatAPI.sendMessage(await window.chatAPI.getMessages());
@@ -533,6 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     chatView.appendMessage(response);
                 }
                 sendBtn.disabled = false;
+                updateTokenCountDisplay();
             }
         }
     });
@@ -596,9 +617,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('touchend', stopResize);
 
     clearChatBtn.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to clear the chat?')) {
+                if (confirm('Are you sure you want to clear the chat?')) {
             await window.chatAPI.clearMessages();
             chatView.clear();
+            updateTokenCountDisplay();
         }
     });
 
@@ -649,8 +671,9 @@ document.addEventListener('DOMContentLoaded', () => {
             modelNickname.textContent = 'No Model';
             sendBtn.disabled = true;
         }
-        const messages = await window.chatAPI.getMessages();
+                const messages = await window.chatAPI.getMessages();
         chatView.renderMessages(messages);
+        updateTokenCountDisplay();
     };
     init();
 });
