@@ -324,20 +324,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" class="remove-model-btn text-xl" data-index="${index}">➖</button>
                 </div>
                 <input type="text" value="${model.endpoint}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Endpoint URL">
-                <div class="model-name-container" style="display: ${model.apiSchema === 'google' ? 'none' : 'block'}">
-                    <input type="text" value="${model.model}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Model Name">
-                </div>
                 <input type="text" value="${model.nickname}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nickname">
                 <textarea class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="System Prompt">${model.system_prompt}</textarea>
                 <input type="password" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
                 <input type="number" step="0.1" value="${model.temperature}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Temperature">
                 <input type="number" value="${model.maxOutputTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Output Tokens">
                 <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
-                <select class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600 api-schema" placeholder="API Schema">
-                    <option value="openai" ${model.apiSchema === 'openai' ? 'selected' : ''}>OpenAI</option>
-                    <option value="google" ${model.apiSchema === 'google' ? 'selected' : ''}>Google</option>
-                </select>
-                <div class="google-search-container" style="display: ${model.apiSchema === 'google' ? 'block' : 'none'}">
+                <div class="google-search-container">
                     <div class="flex items-center mt-2">
                         <input type="checkbox" id="google-search-checkbox-${index}" class="mr-2" ${model.useGoogleSearch ? 'checked' : ''}>
                         <label for="google-search-checkbox-${index}">Enable Google Search</label>
@@ -362,21 +355,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderLlmConfigs();
             });
         });
-
-        document.querySelectorAll('.api-schema').forEach(select => {
-            select.addEventListener('change', (e) => {
-                const configDiv = e.target.closest('.mb-4');
-                const googleSearchContainer = configDiv.querySelector('.google-search-container');
-                const modelNameContainer = configDiv.querySelector('.model-name-container');
-                if (e.target.value === 'google') {
-                    googleSearchContainer.style.display = 'block';
-                    modelNameContainer.style.display = 'none';
-                } else {
-                    googleSearchContainer.style.display = 'none';
-                    modelNameContainer.style.display = 'block';
-                }
-            });
-        });
     };
 
     cycleModelBtn.addEventListener('click', () => {
@@ -397,11 +375,9 @@ document.addEventListener('DOMContentLoaded', () => {
         window.chatAPI.addModel({
             endpoint: '',
             apiKey: '',
-            model: '',
             nickname: 'New Model',
             temperature: 0.7,
             system_prompt: 'You are a helpful assistant.',
-            apiSchema: 'openai',
             maxOutputTokens: 2048
         });
         renderLlmConfigs();
@@ -412,17 +388,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const newModels = Array.from(llmConfigsContainer.children).map(configDiv => {
             return {
                 endpoint: configDiv.querySelector('input[placeholder="Endpoint URL"]').value,
-                model: configDiv.querySelector('.api-schema').value === 'google' ? '' : configDiv.querySelector('input[placeholder="Model Name"]').value,
                 nickname: configDiv.querySelector('input[placeholder="Nickname"]').value,
                 apiKey: configDiv.querySelector('input[placeholder="API Key"]').value,
                 temperature: parseFloat(configDiv.querySelector('input[placeholder="Temperature"]').value),
                 maxOutputTokens: parseInt(configDiv.querySelector('input[placeholder="Max Output Tokens"]').value, 10),
                 system_prompt: configDiv.querySelector('textarea').value,
-                apiSchema: configDiv.querySelector('.api-schema').value,
-                useGoogleSearch: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[id^="google-search-checkbox-"]').checked : false,
-                useUrlContext: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[id^="url-context-checkbox-"]').checked : false,
-                prependSystemPrompt: configDiv.querySelector('.api-schema').value === 'google' ? configDiv.querySelector('input[id^="prepend-system-prompt-checkbox-"]').checked : false,
-                thinkingBudget: configDiv.querySelector('.api-schema').value === 'google' ? parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10) : null,
+                useGoogleSearch: configDiv.querySelector('input[id^="google-search-checkbox-"]').checked,
+                useUrlContext: configDiv.querySelector('input[id^="url-context-checkbox-"]').checked,
+                prependSystemPrompt: configDiv.querySelector('input[id^="prepend-system-prompt-checkbox-"]').checked,
+                thinkingBudget: parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10),
             };
         });
         window.chatAPI.saveModels(newModels);

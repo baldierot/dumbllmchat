@@ -72,13 +72,11 @@ class ChatAPI {
         return models ? JSON.parse(models) : [
             {
                 "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent",
-                "model": "",
                 "nickname": "flash-lite",
                 "apiKey": "",
                 "temperature": 0.7,
                 "maxOutputTokens": null,
                 "system_prompt": "You are a helpful assistant.",
-                "apiSchema": "google",
                 "useGoogleSearch": true,
                 "useUrlContext": false,
                 "prependSystemPrompt": false,
@@ -86,13 +84,11 @@ class ChatAPI {
             },
             {
                 "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
-                "model": "",
                 "nickname": "flash",
                 "apiKey": "",
                 "temperature": 0.7,
                 "maxOutputTokens": null,
                 "system_prompt": "You are a helpful assistant.",
-                "apiSchema": "google",
                 "useGoogleSearch": true,
                 "useUrlContext": false,
                 "prependSystemPrompt": false,
@@ -100,13 +96,11 @@ class ChatAPI {
             },
             {
                 "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
-                "model": "",
                 "nickname": "pro",
                 "apiKey": "",
                 "temperature": 0.7,
                 "maxOutputTokens": null,
                 "system_prompt": "You are a helpful assistant.",
-                "apiSchema": "google",
                 "useGoogleSearch": true,
                 "useUrlContext": false,
                 "prependSystemPrompt": false,
@@ -201,140 +195,97 @@ class ChatAPI {
 
     async sendMessage(messages) {
         const currentModel = this.getCurrentModel();
-        const { endpoint, apiKey, model, temperature, system_prompt, apiSchema, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget } = currentModel;
+        const { endpoint, apiKey, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget } = currentModel;
 
         let requestBody;
         let fetchEndpoint = endpoint;
 
-        if (apiSchema === 'google') {
-            const googleMessages = messages.map(msg => {
-                const parts = [{ text: msg.content }];
-                if (msg.files) {
-                    msg.files.forEach(file => {
-                        parts.push({
-                            inline_data: {
-                                mime_type: file.type,
-                                data: file.data.split(',')[1]
-                            }
-                        });
+        const googleMessages = messages.map(msg => {
+            const parts = [{ text: msg.content }];
+            if (msg.files) {
+                msg.files.forEach(file => {
+                    parts.push({
+                        inline_data: {
+                            mime_type: file.type,
+                            data: file.data.split(',')[1]
+                        }
                     });
-                }
-                return {
-                    role: msg.sender === 'User' ? 'user' : 'model',
-                    parts: parts
-                };
-            });
-
-            if (prependSystemPrompt) {
-                const lastMessage = googleMessages[googleMessages.length - 1];
-                if (lastMessage.role === 'user') {
-                    lastMessage.parts[0].text = `${system_prompt}\n\n${lastMessage.parts[0].text}`;
-                }
+                });
             }
-
-            requestBody = {
-                contents: googleMessages,
-                generationConfig: {
-                    temperature,
-                    topK: 1,
-                    topP: 1,
-                    maxOutputTokens: maxOutputTokens || 2048,
-                    stopSequences: []
-                },
-                safetySettings: [
-                    {
-                        category: 'HARM_CATEGORY_HARASSMENT',
-                        threshold: 'BLOCK_NONE'
-                    },
-                    {
-                        category: 'HARM_CATEGORY_HATE_SPEECH',
-                        threshold: 'BLOCK_NONE'
-                    },
-                    {
-                        category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-                        threshold: 'BLOCK_NONE'
-                    },
-                    {
-                        category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-                        threshold: 'BLOCK_NONE'
-                    }
-                ]
+            return {
+                role: msg.sender === 'User' ? 'user' : 'model',
+                parts: parts
             };
+        });
 
-            if (!prependSystemPrompt) {
-                requestBody.systemInstruction = {
-                    role: 'user',
-                    parts: [{ text: system_prompt }]
-                };
+        if (prependSystemPrompt) {
+            const lastMessage = googleMessages[googleMessages.length - 1];
+            if (lastMessage.role === 'user') {
+                lastMessage.parts[0].text = `${system_prompt}\n\n${lastMessage.parts[0].text}`;
             }
+        }
 
-            const tools = [];
-            if (useGoogleSearch) {
-                tools.push({ "google_search": {} });
-            }
-            if (useUrlContext) {
-                tools.push({ "url_context": {} });
-            }
-            if (tools.length > 0) {
-                requestBody.tools = tools;
-            }
-
-            if (thinkingBudget) {
-                requestBody.generationConfig.thinkingConfig = {
-                    thinkingBudget: thinkingBudget
-                }
-            }
-
-            fetchEndpoint = endpoint;
-        } else { // openai
-            let apiMessages;
-            if (prependSystemPrompt) {
-                apiMessages = messages.map(msg => ({
-                    role: msg.sender.toLowerCase(),
-                    content: msg.content
-                }));
-                const lastMessage = apiMessages[apiMessages.length - 1];
-                if (lastMessage.role === 'user') {
-                    lastMessage.content = `${system_prompt}\n\n${lastMessage.content}`;
-                }
-            } else {
-                apiMessages = [
-                    { role: 'system', content: system_prompt },
-                    ...messages.map(msg => {
-                        const content = [{ type: 'text', text: msg.content }];
-                        if (msg.files) {
-                            msg.files.forEach(file => {
-                                content.push({
-                                    type: 'image_url',
-                                    image_url: {
-                                        url: file.data
-                                    }
-                                });
-                            });
-                        }
-                        return {
-                            role: msg.sender.toLowerCase(),
-                            content: content
-                        }
-                    })
-                ];
-            }
-
-
-            requestBody = {
-                model,
-                messages: apiMessages,
+        requestBody = {
+            contents: googleMessages,
+            generationConfig: {
                 temperature,
+                topK: 1,
+                topP: 1,
+                maxOutputTokens: maxOutputTokens || 2048,
+                stopSequences: []
+            },
+            safetySettings: [
+                {
+                    category: 'HARM_CATEGORY_HARASSMENT',
+                    threshold: 'BLOCK_NONE'
+                },
+                {
+                    category: 'HARM_CATEGORY_HATE_SPEECH',
+                    threshold: 'BLOCK_NONE'
+                },
+                {
+                    category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                    threshold: 'BLOCK_NONE'
+                },
+                {
+                    category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+                    threshold: 'BLOCK_NONE'
+                }
+            ]
+        };
+
+        if (!prependSystemPrompt) {
+            requestBody.systemInstruction = {
+                role: 'user',
+                parts: [{ text: system_prompt }]
             };
         }
+
+        const tools = [];
+        if (useGoogleSearch) {
+            tools.push({ "google_search": {} });
+        }
+        if (useUrlContext) {
+            tools.push({ "url_context": {} });
+        }
+        if (tools.length > 0) {
+            requestBody.tools = tools;
+        }
+
+        if (thinkingBudget) {
+            requestBody.generationConfig.thinkingConfig = {
+                thinkingBudget: thinkingBudget
+            }
+        }
+
+        fetchEndpoint = endpoint;
 
         try {
             const response = await fetch(fetchEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(apiSchema === 'openai' && { 'Authorization': `Bearer ${apiKey}` }),
-                    ...(apiSchema === 'google' && { 'x-goog-api-key': apiKey })
+                    'x-goog-api-key': apiKey
                 },
                 body: JSON.stringify(requestBody)
             });
@@ -347,28 +298,17 @@ class ChatAPI {
             const data = await response.json();
             let message;
 
-            if (apiSchema === 'google') {
-                const content = data.candidates[0].content;
-                if (content && content.parts) {
-                    const combinedText = content.parts.map(part => part.text).join('');
-                    message = { content: combinedText };
-                } else {
-                    message = { content: '[The model sent an empty response.]' };
-                }
-            } else { // openai
-                message = data.choices[0]?.message;
+            const content = data.candidates[0].content;
+            if (content && content.parts) {
+                const combinedText = content.parts.map(part => part.text).join('');
+                message = { content: combinedText };
+            } else {
+                message = { content: '[The model sent an empty response.]' };
             }
 
             if (message?.content) {
                 const assistantMessage = { sender: 'Assistant', content: message.content };
                 return await this.addMessage(assistantMessage);
-            } else if (message?.tool_calls) {
-                const toolCall = message.tool_calls[0];
-                const functionName = toolCall.function.name;
-                const functionArgs = toolCall.function.arguments;
-                const content = `The model wants to call the '${functionName}' tool with the following arguments: ${functionArgs}. However, tool execution is not yet implemented.`;
-                const toolMessage = { sender: 'Assistant', content: content };
-                return await this.addMessage(toolMessage);
             } else {
                 throw new Error('API Error: Invalid response format.');
             }
