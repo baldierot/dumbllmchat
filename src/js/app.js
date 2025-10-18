@@ -17,7 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const conversationsContainer = document.getElementById('conversations-container');
     const addConversationBtn = document.getElementById('add-conversation-btn');
     const renameConversationBtn = document.getElementById('rename-conversation-btn');
-        const deleteConversationBtn = document.getElementById('delete-conversation-btn');
+    const deleteConversationBtn = document.getElementById('delete-conversation-btn');
+    const compressConversationBtn = document.getElementById('compress-conversation-btn');
     const importConversationBtn = document.getElementById('import-conversation-btn');
     const exportConversationBtn = document.getElementById('export-conversation-btn');
     const loadConversationBtn = document.getElementById('load-conversation-btn');
@@ -200,8 +201,9 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedConversationId = null;
         renameConversationBtn.disabled = true;
                 deleteConversationBtn.disabled = true;
-        loadConversationBtn.disabled = true;
+                loadConversationBtn.disabled = true;
         exportConversationBtn.disabled = true;
+        compressConversationBtn.disabled = true;
 
         for (const conversation of conversations) {
             const conversationLi = document.createElement('li');
@@ -235,6 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 deleteConversationBtn.disabled = false;
                 loadConversationBtn.disabled = false;
                 exportConversationBtn.disabled = false;
+                compressConversationBtn.disabled = false;
                 conversationLi.scrollIntoView({ block: 'nearest' });
             });
 
@@ -249,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         deleteConversationBtn.disabled = false;
             loadConversationBtn.disabled = false;
             exportConversationBtn.disabled = false;
+            compressConversationBtn.disabled = false;
             setTimeout(() => {
                 currentConversationLi.scrollIntoView({ block: 'nearest' });
             }, 0);
@@ -327,6 +331,25 @@ document.addEventListener('DOMContentLoaded', () => {
             chatView.renderMessages(messages);
             await renderConversations();
             updateTokenCountDisplay();
+        }
+    });
+
+    compressConversationBtn.addEventListener('click', async () => {
+        if (selectedConversationId !== null) {
+            const userPrompt = prompt('Enter a prompt for the compression:', 'Summarize this conversation.');
+            if (userPrompt) {
+                compressConversationBtn.disabled = true;
+                compressConversationBtn.textContent = '📦...';
+                try {
+                    await window.chatAPI.compressConversation(selectedConversationId, userPrompt);
+                    await renderConversations();
+                } catch (error) {
+                    alert('Error compressing conversation: ' + error.message);
+                } finally {
+                    compressConversationBtn.disabled = false;
+                    compressConversationBtn.textContent = '📦';
+                }
+            }
         }
     });
 

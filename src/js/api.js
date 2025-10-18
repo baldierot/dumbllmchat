@@ -248,9 +248,9 @@ class ChatAPI {
         }
     }
 
-    async sendMessage(messages) {
+    async _generateContent(messages) {
         const currentModel = this.getCurrentModel();
-                                const { modelName, apiKey, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget, proxy } = currentModel;
+        const { modelName, apiKey, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget, proxy } = currentModel;
 
         let requestBody;
         const normalizedProxy = normalizeProxyUrl(proxy);
@@ -328,7 +328,7 @@ class ChatAPI {
             requestBody.tools = tools;
         }
 
-                if (thinkingBudget) {
+        if (thinkingBudget) {
             requestBody.generationConfig.thinkingConfig = {
                 thinkingBudget: thinkingBudget
             }
@@ -350,28 +350,46 @@ class ChatAPI {
             }
 
             const data = await response.json();
-            let message;
-
             const content = data.candidates[0].content;
             if (content && content.parts) {
-                const combinedText = content.parts.map(part => part.text).join('');
-                message = { content: combinedText };
+                return content.parts.map(part => part.text).join('');
             } else {
-                message = { content: '[The model sent an empty response.]' };
+                return '[The model sent an empty response.]';
             }
-
-            if (message?.content) {
-                const assistantMessage = { sender: 'Assistant', content: message.content };
-                return await this.addMessage(assistantMessage);
-            } else {
-                throw new Error('API Error: Invalid response format.');
-            }
-
         } catch (error) {
             console.error('API call failed:', error);
-            const errorMessage = { sender: 'Error', content: `An error occurred: ${error.message}` };
-            return await this.addMessage(errorMessage);
+            return `An error occurred: ${error.message}`;
         }
+    }
+
+    async sendMessage(messages) {
+        const content = await this._generateContent(messages);
+        const assistantMessage = { sender: 'Assistant', content };
+        return await this.addMessage(assistantMessage);
+    }
+
+    async compressConversation(conversationId, userPrompt) {
+        const conversation = this.conversations.find(c => c.id === conversationId);
+        if (!conversation) {
+            throw new Error('Conversation not found');
+        }
+
+        const messages = await window.db.getMessages(conversationId);
+                const conversationText = messages.map(m => `${m.sender}: ${m.content}`).join('\n');
+
+        const compressionPrompt = `You are a Specialized Context Preservation and Compression Engine. Your primary goal is to losslessly (or near-losslessly) compress the provided multi-turn conversation history into a single, highly dense, and concise textual block. This block must function as a perfect summary and contextual anchor for a subsequent LLM to pick up the conversation as if it had access to the full original transcript.\n\n${userPrompt}\n\nHere is the conversation:\n\n${conversationText}`;
+
+        const compressedContent = await this._generateContent([
+            { sender: 'User', content: compressionPrompt }
+        ]);
+
+        const newConversationName = `[Compressed] ${conversation.name}`;
+        const newConversation = await this.addConversation({ name: newConversationName, timestamp: Date.now() });
+
+        const compressedMessage = { sender: 'Assistant', content: compressedContent, conversationId: newConversation.id };
+        await window.db.addMessage(compressedMessage);
+
+        return newConversation;
     }
 }
 
