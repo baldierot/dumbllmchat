@@ -1,0 +1,272 @@
+import { dom } from './dom.js';
+
+let selectedMessage = null;
+
+export function showMessageControls(messageElement, x, y, app) {
+    const controls = document.createElement('div');
+    controls.className = 'message-controls absolute bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2 flex space-x-2';
+    const messageId = parseInt(messageElement.dataset.id);
+
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '✏️';
+    editBtn.addEventListener('click', async () => {
+        const message = await app.chatAPI.getMessage(messageId);
+        dom.messageInput.value = message.content;
+        app.attachedFiles = message.files || [];
+        app.editingMessageId = messageId;
+        renderAttachedFiles(app);
+        dom.cancelEditBtn.classList.remove('hidden');
+        dom.sendBtn.textContent = '💾';
+        removeMessageControls();
+        dom.messageInput.focus();
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '🗑️';
+    deleteBtn.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to delete this message?')) {
+            await app.chatAPI.removeMessage(messageId);
+            app.chatView.removeMessage(messageId);
+        }
+        removeMessageControls();
+    });
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = '📋';
+    copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(messageElement.textContent).then(() => {
+            alert('Message copied to clipboard!');
+        }, () => {
+            alert('Failed to copy message.');
+        });
+        removeMessageControls();
+    });
+
+    const regenerateBtn = document.createElement('button');
+    regenerateBtn.textContent = '🔄️';
+    regenerateBtn.addEventListener('click', async () => {
+        const messages = await app.chatAPI.getMessages();
+        const messageIndex = messages.findIndex(m => m.id === messageId);
+        const clickedMessage = messages[messageIndex];
+
+        let newMessages;
+        if (clickedMessage.sender === 'User') {
+            newMessages = messages.slice(0, messageIndex + 1);
+        } else { // Assistant message
+            newMessages = messages.slice(0, messageIndex);
+        }
+
+        await app.chatAPI.clearMessages();
+        for (const msg of newMessages) {
+            await app.chatAPI.addMessage(msg);
+        }
+        
+        const scrollTop = dom.chatContainer.scrollTop;
+        app.chatView.renderMessages(newMessages);
+        dom.chatContainer.scrollTop = scrollTop;
+
+        const lastMessage = newMessages[newMessages.length - 1];
+        if (lastMessage && lastMessage.sender === 'User') {
+            removeMessageControls();
+            dom.sendBtn.disabled = true;
+
+            const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
+            app.chatView.appendMessage(pendingMessage);
+
+            const response = await app.chatAPI.sendMessage(newMessages);
+            
+            app.chatView.removeMessage(-1);
+
+            if (response) {
+                app.chatView.appendMessage(response);
+            }
+            dom.sendBtn.disabled = false;
+            dom.messageInput.focus();
+            updateTokenCountDisplay(app.chatAPI);
+        }
+    });
+
+    controls.appendChild(editBtn);
+    controls.appendChild(deleteBtn);
+    controls.appendChild(copyBtn);
+    controls.appendChild(regenerateBtn);
+
+    controls.style.visibility = 'hidden';
+    document.body.appendChild(controls);
+
+    const rect = controls.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let newX = x;
+    let newY = y;
+
+    if (x + rect.width > viewportWidth) {
+        newX = viewportWidth - rect.width - 5;
+    }
+    if (y + rect.height > viewportHeight) {
+        newY = viewportHeight - rect.height - 5;
+    }
+    
+    if (newX < 0) newX = 5;
+    if (newY < 0) newY = 5;
+
+    controls.style.left = `${newX}px`;
+    controls.style.top = `${newY}px`;
+    controls.style.visibility = 'visible';
+};
+
+export function removeMessageControls() {
+    const controls = document.querySelector('.message-controls');
+    if (controls) {
+        controls.remove();
+    }
+    if (selectedMessage) {
+        selectedMessage = null;
+    }
+};
+
+export async function updateTokenCountDisplay(chatAPI) {
+    const messages = await chatAPI.getMessages();
+    const currentTokenCount = await chatAPI.countTokens(messages);
+    const currentModel = chatAPI.getCurrentModel();
+    dom.tokenCountDisplay.textContent = `${currentTokenCount}/${currentModel.maxTokens}`;
+};
+
+export async function renderConversations(app) {
+    const conversations = await app.chatAPI.getConversations();
+    conversations.reverse();
+    dom.conversationsContainer.innerHTML = '';
+    app.selectedConversationId = null;
+    dom.renameConversationBtn.disabled = true;
+    dom.deleteConversationBtn.disabled = true;
+    dom.loadConversationBtn.disabled = true;
+    dom.exportConversationBtn.disabled = true;
+    dom.compressConversationBtn.disabled = true;
+
+    for (const conversation of conversations) {
+        const conversationLi = document.createElement('li');
+        conversationLi.className = 'p-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700';
+        conversationLi.dataset.id = conversation.id;
+
+        const conversationName = document.createElement('span');
+        conversationName.className = 'truncate';
+        let title = conversation.name;
+        if (!title) {
+            const messages = await window.db.getMessages(conversation.id);
+            if (messages.length > 0) {
+                title = messages[0].content.split('\n')[0];
+            } else {
+                title = 'New Conversation';
+            }
+        }
+        conversationName.textContent = title;
+        conversationLi.appendChild(conversationName);
+
+        conversationLi.addEventListener('click', () => {
+            if (app.selectedConversationId !== null) {
+                const previousSelected = dom.conversationsContainer.querySelector(`[data-id='${app.selectedConversationId}']`);
+                if (previousSelected) {
+                    previousSelected.classList.remove('selected');
+                }
+            }
+            conversationLi.classList.add('selected');
+            app.selectedConversationId = conversation.id;
+            dom.renameConversationBtn.disabled = false;
+            dom.deleteConversationBtn.disabled = false;
+            dom.loadConversationBtn.disabled = false;
+            dom.exportConversationBtn.disabled = false;
+            dom.compressConversationBtn.disabled = false;
+            conversationLi.scrollIntoView({ block: 'nearest' });
+        });
+
+        dom.conversationsContainer.appendChild(conversationLi);
+    }
+
+    const currentConversationLi = dom.conversationsContainer.querySelector(`[data-id='${app.chatAPI.currentConversationId}']`);
+    if (currentConversationLi) {
+        currentConversationLi.classList.add('selected');
+        app.selectedConversationId = app.chatAPI.currentConversationId;
+        dom.renameConversationBtn.disabled = false;
+        dom.deleteConversationBtn.disabled = false;
+        dom.loadConversationBtn.disabled = false;
+        dom.exportConversationBtn.disabled = false;
+        dom.compressConversationBtn.disabled = false;
+        setTimeout(() => {
+            currentConversationLi.scrollIntoView({ block: 'nearest' });
+        }, 0);
+    }
+};
+
+export function renderLlmConfigs(chatAPI) {
+    dom.llmConfigsContainer.innerHTML = '';
+    chatAPI.getModels().forEach((model, index) => {
+        const configDiv = document.createElement('div');
+        configDiv.className = 'mb-4 p-2 border border-black rounded-lg dark:border-black';
+        configDiv.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-lg font-semibold">${model.nickname}</h3>
+                <button type="button" class="remove-model-btn text-xl" data-index="${index}">➖</button>
+            </div>
+            <input type="text" value="${model.proxy || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Proxy URL">
+            <input type="text" value="${model.modelName}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Model Name">
+            <input type="text" value="${model.nickname}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nickname">
+            <textarea class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="System Prompt">${model.system_prompt}</textarea>
+            <input type="text" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
+            <input type="number" step="0.1" value="${model.temperature}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Temperature">
+            <input type="number" value="${model.maxOutputTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Output Tokens">
+            <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
+            <div class="google-search-container">
+                <div class="flex items-center mt-2">
+                    <input type="checkbox" id="google-search-checkbox-${index}" class="mr-2" ${model.useGoogleSearch ? 'checked' : ''}>
+                    <label for="google-search-checkbox-${index}">Enable Google Search</label>
+                </div>
+                <div class="flex items-center mt-2">
+                    <input type="checkbox" id="prepend-system-prompt-checkbox-${index}" class="mr-2" ${model.prependSystemPrompt ? 'checked' : ''}>
+                    <label for="prepend-system-prompt-checkbox-${index}">Prepend System Prompt</label>
+                </div>
+                <div class="flex items-center mt-2">
+                    <input type="checkbox" id="url-context-checkbox-${index}" class="mr-2" ${model.useUrlContext ? 'checked' : ''}>
+                    <label for="url-context-checkbox-${index}">Enable URL Context</label>
+                </div>
+            </div>
+        `;
+        dom.llmConfigsContainer.appendChild(configDiv);
+    });
+
+    document.querySelectorAll('.remove-model-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = e.target.dataset.index;
+            chatAPI.removeModel(index);
+            renderLlmConfigs(chatAPI);
+        });
+    });
+};
+
+export function renderAttachedFiles(app) {
+    dom.attachedFilesContainer.innerHTML = '';
+    app.attachedFiles.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'attached-file-item';
+        const fileName = document.createElement('span');
+        fileName.textContent = file.name;
+        fileItem.appendChild(fileName);
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-file-btn';
+        removeBtn.textContent = '❌';
+        removeBtn.addEventListener('click', () => {
+            app.attachedFiles.splice(index, 1);
+            renderAttachedFiles(app);
+        });
+        fileItem.appendChild(removeBtn);
+        dom.attachedFilesContainer.appendChild(fileItem);
+    });
+
+    const contentContainer = dom.footer.querySelector('.flex-grow');
+    const messageInputMinHeight = 90;
+    const contentHeight = contentContainer.scrollHeight;
+    const minHeight = contentHeight - dom.messageInput.offsetHeight + messageInputMinHeight;
+    if (dom.footer.offsetHeight < minHeight) {
+        dom.footer.style.height = `${minHeight}px`;
+    }
+};
