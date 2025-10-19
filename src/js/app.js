@@ -725,6 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const messages = await window.chatAPI.getMessages();
         chatView.renderMessages(messages);
         updateTokenCountDisplay();
+        renderAttachedFiles();
     };
     init();
 });
