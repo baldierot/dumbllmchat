@@ -284,7 +284,7 @@ class ChatAPI {
         }
     }
 
-    async _generateContent(messages) {
+    async _generateContent(messages, signal) {
         const currentModel = this.getCurrentModel();
         const { modelName, apiKey, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget, proxy } = currentModel;
 
@@ -370,32 +370,28 @@ class ChatAPI {
             }
         }
 
-        try {
-            const response = await fetch(fetchEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': apiKey,
-                    'ngrok-skip-browser-warning': 'true'
-                },
-                body: JSON.stringify(requestBody)
-            });
+        const response = await fetch(fetchEndpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': apiKey,
+                'ngrok-skip-browser-warning': 'true'
+            },
+            body: JSON.stringify(requestBody),
+            signal
+        });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
-            }
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
+        }
 
-            const data = await response.json();
-            const content = data.candidates[0].content;
-            if (content && content.parts) {
-                return content.parts.map(part => part.text).join('');
-            } else {
-                return '[The model sent an empty response.]';
-            }
-        } catch (error) {
-            console.error('API call failed:', error);
-            return `An error occurred: ${error.message}`;
+        const data = await response.json();
+        const content = data.candidates[0].content;
+        if (content && content.parts) {
+            return content.parts.map(part => part.text).join('');
+        } else {
+            return '[The model sent an empty response.]';
         }
     }
 
@@ -405,7 +401,11 @@ class ChatAPI {
         return await this.addMessage(assistantMessage);
     }
 
-    async compressConversation(conversationId, progressCallback) {
+    async compressConversation(conversationId, progressCallback, signal) {
+        if (signal?.aborted) {
+            return;
+        }
+
         const conversation = this.conversations.find(c => c.id === conversationId);
         if (!conversation) {
             throw new Error('Conversation not found');
@@ -416,7 +416,18 @@ class ChatAPI {
         const newConversationName = `[Compressed] ${conversation.name}`;
         const newConversation = await this.addConversation({ name: newConversationName, timestamp: Date.now() });
 
+        const onAbort = async () => {
+            await this.deleteConversation(newConversation.id);
+            signal.removeEventListener('abort', onAbort);
+        };
+        signal?.addEventListener('abort', onAbort);
+
+
         for (let i = 0; i < messages.length; i += 4) {
+            if (signal?.aborted) {
+                throw new DOMException('Aborted by user', 'AbortError');
+            }
+
             const currentPass = (i / 4) + 1;
             if (progressCallback) {
                 progressCallback(currentPass, totalPasses);
@@ -429,12 +440,13 @@ class ChatAPI {
 
             const compressedContent = await this._generateContent([
                 { sender: 'User', content: compressionPrompt }
-            ]);
+            ], signal);
 
             const compressedMessage = { sender: 'Assistant', content: compressedContent, conversationId: newConversation.id };
             await window.db.addMessage(compressedMessage);
         }
 
+        signal?.removeEventListener('abort', onAbort);
         return newConversation;
     }
 }

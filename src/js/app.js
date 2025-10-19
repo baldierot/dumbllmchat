@@ -339,10 +339,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    let compressionController = null;
+
     compressConversationBtn.addEventListener('click', async () => {
+        if (compressionController) {
+            compressionController.abort();
+            compressionController = null;
+            compressConversationBtn.textContent = '📦';
+            return;
+        }
+
         if (selectedConversationId !== null) {
             if (confirm('Are you sure you want to compress this conversation?')) {
-                compressConversationBtn.disabled = true;
+                compressionController = new AbortController();
+                const signal = compressionController.signal;
+
                 compressConversationBtn.textContent = '📦...';
 
                 const progressCallback = (currentPass, totalPasses) => {
@@ -350,12 +361,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
                 try {
-                    await window.chatAPI.compressConversation(selectedConversationId, progressCallback);
+                    await window.chatAPI.compressConversation(selectedConversationId, progressCallback, signal);
                     await renderConversations();
                 } catch (error) {
-                    alert('Error compressing conversation: ' + error.message);
+                    if (error.name !== 'AbortError') {
+                        alert('Error compressing conversation: ' + error.message);
+                    } else {
+                        alert('Compression cancelled.');
+                        await renderConversations();
+                    }
                 } finally {
-                    compressConversationBtn.disabled = false;
+                    compressionController = null;
                     compressConversationBtn.textContent = '📦';
                 }
             }
@@ -572,18 +588,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderAttachedFiles();
 
                 sendBtn.disabled = true;
-                                const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
+                const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
                 chatView.appendMessage(pendingMessage);
 
-                const response = await window.chatAPI.sendMessage(await window.chatAPI.getMessages());
-
-                chatView.removeMessage(-1);
-
-                if (response) {
-                    chatView.appendMessage(response);
+                try {
+                    const response = await window.chatAPI.sendMessage(await window.chatAPI.getMessages());
+                    chatView.removeMessage(-1);
+                    if (response) {
+                        chatView.appendMessage(response);
+                    }
+                } catch (error) {
+                    chatView.removeMessage(-1);
+                    const errorMessage = { sender: 'Error', content: `An error occurred: ${error.message}`, id: Date.now() };
+                    chatView.appendMessage(errorMessage);
+                } finally {
+                    sendBtn.disabled = false;
+                    updateTokenCountDisplay();
                 }
-                sendBtn.disabled = false;
-                updateTokenCountDisplay();
             }
         }
     });
