@@ -279,10 +279,15 @@ document.addEventListener('DOMContentLoaded', () => {
     loadConversationBtn.addEventListener('click', async () => {
         if (selectedConversationId !== null) {
             await window.chatAPI.switchConversation(selectedConversationId);
-                        const messages = await window.chatAPI.getMessages();
+            const messages = await window.chatAPI.getMessages();
             chatView.renderMessages(messages);
             historyModal.classList.add('hidden');
             updateTokenCountDisplay();
+
+            const lastMessage = chatView.chatContainer.lastElementChild;
+            if (lastMessage) {
+                lastMessage.scrollIntoView({ behavior: 'smooth' });
+            }
         }
     });
 
