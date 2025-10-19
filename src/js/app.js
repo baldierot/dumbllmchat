@@ -344,8 +344,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (confirm('Are you sure you want to compress this conversation?')) {
                 compressConversationBtn.disabled = true;
                 compressConversationBtn.textContent = '📦...';
+
+                const progressCallback = (currentPass, totalPasses) => {
+                    compressConversationBtn.textContent = `📦 ${currentPass}/${totalPasses}`;
+                };
+
                 try {
-                    await window.chatAPI.compressConversation(selectedConversationId);
+                    await window.chatAPI.compressConversation(selectedConversationId, progressCallback);
                     await renderConversations();
                 } catch (error) {
                     alert('Error compressing conversation: ' + error.message);

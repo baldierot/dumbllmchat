@@ -405,17 +405,23 @@ class ChatAPI {
         return await this.addMessage(assistantMessage);
     }
 
-    async compressConversation(conversationId) {
+    async compressConversation(conversationId, progressCallback) {
         const conversation = this.conversations.find(c => c.id === conversationId);
         if (!conversation) {
             throw new Error('Conversation not found');
         }
 
         const messages = await window.db.getMessages(conversationId);
+        const totalPasses = Math.ceil(messages.length / 4);
         const newConversationName = `[Compressed] ${conversation.name}`;
         const newConversation = await this.addConversation({ name: newConversationName, timestamp: Date.now() });
 
         for (let i = 0; i < messages.length; i += 4) {
+            const currentPass = (i / 4) + 1;
+            if (progressCallback) {
+                progressCallback(currentPass, totalPasses);
+            }
+
             const chunk = messages.slice(i, i + 4);
             const conversationText = chunk.map(m => `${m.sender}: ${m.content}`).join('\n');
 
