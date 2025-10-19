@@ -412,19 +412,22 @@ class ChatAPI {
         }
 
         const messages = await window.db.getMessages(conversationId);
-                const conversationText = messages.map(m => `${m.sender}: ${m.content}`).join('\n');
-
-        const compressionPrompt = `You are a Specialized Context Preservation and Compression Engine. Your primary goal is to losslessly (or near-losslessly) compress the provided multi-turn conversation history into a single, highly dense, and concise textual block. This block must function as a perfect summary and contextual anchor for a subsequent LLM to pick up the conversation as if it had access to the full original transcript.\n\nHere is the conversation:\n\n${conversationText}`;
-
-        const compressedContent = await this._generateContent([
-            { sender: 'User', content: compressionPrompt }
-        ]);
-
         const newConversationName = `[Compressed] ${conversation.name}`;
         const newConversation = await this.addConversation({ name: newConversationName, timestamp: Date.now() });
 
-        const compressedMessage = { sender: 'Assistant', content: compressedContent, conversationId: newConversation.id };
-        await window.db.addMessage(compressedMessage);
+        for (let i = 0; i < messages.length; i += 4) {
+            const chunk = messages.slice(i, i + 4);
+            const conversationText = chunk.map(m => `${m.sender}: ${m.content}`).join('\n');
+
+            const compressionPrompt = `You are a Specialized Context Preservation and Compression Engine. Your primary goal is to losslessly (or near-losslessly) compress the provided multi-turn conversation history into a single, highly dense, and concise textual block. This block must function as a perfect summary and contextual anchor for a subsequent LLM to pick up the conversation as if it had access to the full original transcript.\n\nHere is the conversation snippet:\n\n${conversationText}`;
+
+            const compressedContent = await this._generateContent([
+                { sender: 'User', content: compressionPrompt }
+            ]);
+
+            const compressedMessage = { sender: 'Assistant', content: compressedContent, conversationId: newConversation.id };
+            await window.db.addMessage(compressedMessage);
+        }
 
         return newConversation;
     }
