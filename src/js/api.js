@@ -436,7 +436,7 @@ class ChatAPI {
             const chunk = messages.slice(i, i + 4);
             const conversationText = chunk.map(m => `${m.sender}: ${m.content}`).join('\n');
 
-            const compressionPrompt = `You are a Specialized Context Preservation and Compression Engine. Your primary goal is to losslessly (or near-losslessly) compress the provided multi-turn conversation history into a single, highly dense, and concise textual block. This block must function as a perfect summary and contextual anchor for a subsequent LLM to pick up the conversation as if it had access to the full original transcript.\n\nHere is the conversation snippet:\n\n${conversationText}`;
+            const compressionPrompt = `You are a Specialized Context Preservation and Compression Engine. Your primary goal is to losslessly (or near-losslessly) compress the provided multi-turn conversation history into a single, highly dense, and concise textual block. This block must function as a perfect summary and contextual anchor for a subsequent LLM to pick up the conversation as if it had access to the full original transcript.\n\nYour output should only contain the compressed message, with no additional commentary or explanations.\n\nPreserve the original writing style of the conversation to some extent in the compressed output.\n\nHere is the conversation snippet:\n\n${conversationText}`;
 
             const compressedContent = await this._generateContent([
                 { sender: 'User', content: compressionPrompt }
