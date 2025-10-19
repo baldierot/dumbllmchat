@@ -112,7 +112,8 @@ export function initializeEventListeners(app) {
         }
 
         if (app.selectedConversationId !== null) {
-            if (confirm('Are you sure you want to compress this conversation?')) {
+            const currentModel = app.chatAPI.getCurrentModel();
+            if (confirm(`Are you sure you want to compress this conversation using ${currentModel.modelName} (${currentModel.nickname})?`)) {
                 app.compressionController = new AbortController();
                 const signal = app.compressionController.signal;
 
