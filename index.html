@@ -9,13 +9,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <link rel="icon" type="image/x-icon" href="/dumbllmchat/images/icon-512x512.png">
-  <script type="module" crossorigin src="/dumbllmchat/assets/index-BsOvN5yI.js"></script>
+  <script type="module" crossorigin src="/dumbllmchat/assets/index-mmRRdWQ7.js"></script>
   <link rel="stylesheet" crossorigin href="/dumbllmchat/assets/index-BqKY8Qir.css">
 <link rel="manifest" href="/dumbllmchat/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/dumbllmchat/registerSW.js"></script></head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col h-dvh">
 
     <header class="bg-white dark:bg-gray-800 shadow-md z-10">
-        <div class="container mx-auto px-4 py-2 flex justify-between items-center">
+        <div class="container mx-auto px-2 py-2 flex justify-between items-center">
             <button id="cycle-model-btn" class="text-2xl">🔁</button>
                         <div class="flex items-baseline">
                 <h1 id="model-nickname" class="text-lg font-semibold">Gemini Pro</h1>
@@ -29,7 +29,7 @@
         </div>
     </header>
 
-    <main id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4">
+    <main id="chat-container" class="flex-1 overflow-y-auto p-2 space-y-4">
         <!-- Messages will be appended here -->
     </main>
 
@@ -38,14 +38,14 @@
             <div class="w-10 h-1 bg-gray-400 dark:bg-gray-500 rounded-full"></div>
         </div>
         <div class="flex-grow flex">
-            <div class="flex-grow flex flex-col p-4">
+            <div class="flex-grow flex flex-col p-2">
                 <div class="text-sm text-gray-500 dark:text-gray-400 mb-2">
                     <span id="token-count-display">.../...</span>
                 </div>
                 <div id="attached-files-container" class="overflow-y-auto p-2 space-y-2"></div>
                 <textarea id="message-input" class="w-full flex-grow p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 resize-none" placeholder="Type a message..."></textarea>
             </div>
-            <div class="flex flex-col justify-center ml-2 p-4">
+            <div class="flex flex-col justify-center ml-2 p-2">
                 <button id="cancel-edit-btn" class="text-2xl hidden">❌</button>
                 <button id="attach-file-btn" class="text-2xl">📎</button>
                 <button id="send-btn" class="text-2xl">▶️</button>
@@ -54,8 +54,8 @@
     </footer>
 
     <!-- Settings Modal -->
-    <div id="settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full h-full relative flex flex-col">
+    <div id="settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-2">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2 w-full h-full relative flex flex-col">
             <h2 class="text-2xl font-bold mb-4">Settings</h2>
             <div class="flex-grow overflow-y-auto">
                 <form id="settings-form" class="flex flex-col h-full">
@@ -75,8 +75,8 @@
     </div>
 
     <!-- History Modal -->
-    <div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full h-full relative flex flex-col">
+    <div id="history-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-2">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2 w-full h-full relative flex flex-col">
             <h2 class="text-2xl font-bold mb-4">Chat History</h2>
             <div id="conversations-container" class="flex-grow overflow-y-auto"></div>
             <div class="flex justify-between mt-4">
