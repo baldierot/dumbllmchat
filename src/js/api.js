@@ -387,6 +387,9 @@ class ChatAPI {
         }
 
         const data = await response.json();
+        if (!data.candidates || data.candidates.length === 0) {
+            return '[The model sent an empty response.]';
+        }
         const content = data.candidates[0].content;
         if (content && content.parts) {
             return content.parts.map(part => part.text).join('');
@@ -412,6 +415,10 @@ class ChatAPI {
         }
 
         const messages = await window.db.getMessages(conversationId);
+        if (messages.length === 0) {
+            throw new Error("Cannot compress an empty conversation.");
+        }
+
         const totalPasses = Math.ceil(messages.length / 4);
         const newConversationName = `[Compressed] ${conversation.name}`;
         const newConversation = await this.addConversation({ name: newConversationName, timestamp: Date.now() });
@@ -438,9 +445,29 @@ class ChatAPI {
 
             const compressionPrompt = `You are a Specialized Context Preservation and Compression Engine. Your primary goal is to losslessly (or near-losslessly) compress the provided multi-turn conversation history into a single, highly dense, and concise textual block. This block must function as a perfect summary and contextual anchor for a subsequent LLM to pick up the conversation as if it had access to the full original transcript.\n\nYour output should only contain the compressed message, with no additional commentary or explanations.\n\nPreserve the original writing style of the conversation to some extent in the compressed output.\n\nHere is the conversation snippet:\n\n${conversationText}`;
 
-            const compressedContent = await this._generateContent([
-                { sender: 'User', content: compressionPrompt }
-            ], signal);
+            const maxRetries = 3;
+            let compressedContent = '';
+            for (let j = 0; j < maxRetries; j++) {
+                if (signal?.aborted) {
+                    throw new DOMException('Aborted by user', 'AbortError');
+                }
+
+                compressedContent = await this._generateContent([
+                    { sender: 'User', content: compressionPrompt }
+                ], signal);
+
+                if (compressedContent.trim() !== '' && compressedContent !== '[The model sent an empty response.]') {
+                    break;
+                }
+                
+                if (j < maxRetries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000)); 
+                }
+            }
+
+            if (compressedContent.trim() === '' || compressedContent === '[The model sent an empty response.]') {
+                throw new Error(`Compression failed for a chunk after ${maxRetries} retries.`);
+            }
 
             const compressedMessage = { sender: 'Assistant', content: compressedContent, conversationId: newConversation.id };
             await window.db.addMessage(compressedMessage);
