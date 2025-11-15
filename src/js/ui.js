@@ -208,11 +208,9 @@ export function renderLlmConfigs(chatAPI) {
                 <h3 class="text-lg font-semibold">${model.nickname}</h3>
                 <button type="button" class="remove-model-btn text-xl" data-index="${index}">➖</button>
             </div>
-            <input type="text" value="${model.proxy || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Proxy URL">
             <input type="text" value="${model.modelName}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Model Name">
             <input type="text" value="${model.nickname}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nickname">
             <textarea class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="System Prompt">${model.system_prompt}</textarea>
-            <input type="text" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
             <input type="number" step="0.1" value="${model.temperature}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Temperature">
             <input type="number" value="${model.maxOutputTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Output Tokens">
             <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
@@ -242,6 +240,36 @@ export function renderLlmConfigs(chatAPI) {
         });
     });
 };
+
+export function renderGlobalSettings(chatAPI) {
+    const globalSettings = chatAPI.getGlobalSettings();
+    dom.proxyUrl.value = globalSettings.proxy || '';
+    dom.apiKeysContainer.innerHTML = '';
+    globalSettings.apiKeys.forEach(key => {
+        addApiKeyInput(key);
+    });
+}
+
+export function addApiKeyInput(key = '') {
+    const div = document.createElement('div');
+    div.className = 'flex items-center space-x-2';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = key;
+    input.className = 'api-key-input w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600';
+    input.placeholder = 'API Key';
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = '➖';
+    removeBtn.className = 'text-xl';
+    removeBtn.addEventListener('click', () => {
+        div.remove();
+    });
+    div.appendChild(input);
+    div.appendChild(removeBtn);
+    dom.apiKeysContainer.appendChild(div);
+}
+
 
 export function renderAttachedFiles(app) {
     dom.attachedFilesContainer.innerHTML = '';

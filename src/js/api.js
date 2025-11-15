@@ -7,10 +7,17 @@ class ChatAPI {
         this.conversations = [];
         this.currentConversationId = null;
         this.currentModelIndex = this.getCurrentModelIndex();
+        this.apiKeys = [];
+        this.proxy = '';
+        this.invalidKeys = new Map();
         this.init();
     }
 
     async init() {
+        const globalSettings = this.getGlobalSettings();
+        this.apiKeys = globalSettings.apiKeys || [];
+        this.proxy = globalSettings.proxy || '';
+
         await this.fetchAndSetModels();
         this.conversations = await window.db.getConversations();
         this.currentConversationId = this.getCurrentConversationId();
@@ -76,10 +83,8 @@ class ChatAPI {
             {
                                                 "modelName": "gemini-2.5-flash-lite",
                 "nickname": "flash-lite",
-                "apiKey": "",
                 "temperature": 0.7,
                 "maxOutputTokens": 65536,
-                "proxy": "",
                 "system_prompt": "You are a helpful assistant.",
                 "useGoogleSearch": true,
                 "useUrlContext": false,
@@ -89,10 +94,8 @@ class ChatAPI {
                         {
                                                 "modelName": "gemini-2.5-pro",
                 "nickname": "pro",
-                "apiKey": "",
                 "temperature": 0.7,
                 "maxOutputTokens": 65536,
-                "proxy": "",
                 "system_prompt": "You are a helpful assistant.",
                 "useGoogleSearch": true,
                 "useUrlContext": false,
@@ -104,8 +107,11 @@ class ChatAPI {
     }
 
     async fetchModelInfo(model) {
-        const { modelName, apiKey, proxy } = model;
-        const normalizedProxy = normalizeProxyUrl(proxy);
+        const { modelName } = model;
+        const apiKey = this.getApiKey();
+        if (!apiKey) return { ...model, maxTokens: 0 };
+
+        const normalizedProxy = normalizeProxyUrl(this.proxy);
         const fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}`;
 
         try {
@@ -137,15 +143,46 @@ class ChatAPI {
 
     async saveModels(models) {
         const modelsToSave = models.map(m => {
-            const { maxTokens, ...rest } = m;
+            const { maxTokens, apiKey, proxy, ...rest } = m;
             return rest;
         });
         localStorage.setItem('llm_models', JSON.stringify(modelsToSave));
         await this.fetchAndSetModels();
     }
 
+    getGlobalSettings() {
+        const settings = localStorage.getItem('global_settings');
+        return settings ? JSON.parse(settings) : { apiKeys: [], proxy: '' };
+    }
+
+    saveGlobalSettings(settings) {
+        localStorage.setItem('global_settings', JSON.stringify(settings));
+        this.apiKeys = settings.apiKeys || [];
+        this.proxy = settings.proxy || '';
+    }
+
+    getApiKey() {
+        const today = new Date().toISOString().slice(0, 10);
+        let validKeys = this.apiKeys.filter(key => {
+            const invalidDate = this.invalidKeys.get(key);
+            return !invalidDate || invalidDate !== today;
+        });
+
+        if (validKeys.length === 0) {
+            this.invalidKeys.clear();
+            validKeys = this.apiKeys;
+        }
+
+        if (validKeys.length === 0) {
+            return null;
+        }
+
+        return validKeys[0];
+    }
+
     addModel(model) {
-        this.models.push(model);
+        const { apiKey, proxy, ...rest } = model;
+        this.models.push(rest);
         this.saveModels(this.models);
     }
 
@@ -225,8 +262,13 @@ class ChatAPI {
 
     async countTokens(messages) {
         const currentModel = this.getCurrentModel();
-                        const { modelName, apiKey, proxy } = currentModel;
-        const normalizedProxy = normalizeProxyUrl(proxy);
+        const { modelName } = currentModel;
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            throw new Error('No valid API key available.');
+        }
+
+        const normalizedProxy = normalizeProxyUrl(this.proxy);
         const fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}:countTokens`;
 
         const googleMessages = messages.map(msg => {
@@ -264,6 +306,8 @@ class ChatAPI {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                const today = new Date().toISOString().slice(0, 10);
+                this.invalidKeys.set(apiKey, today);
                 throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
             }
 
@@ -271,16 +315,23 @@ class ChatAPI {
             return data.totalTokens;
         } catch (error) {
             console.error('Token count failed:', error);
+            const today = new Date().toISOString().slice(0, 10);
+            this.invalidKeys.set(apiKey, today);
             return 0;
         }
     }
 
     async _generateContent(messages, signal) {
         const currentModel = this.getCurrentModel();
-        const { modelName, apiKey, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget, proxy } = currentModel;
+        const { modelName, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget } = currentModel;
+
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            throw new Error('No valid API key available.');
+        }
 
         let requestBody;
-        const normalizedProxy = normalizeProxyUrl(proxy);
+        const normalizedProxy = normalizeProxyUrl(this.proxy);
         const fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
         const googleMessages = messages.map(msg => {
@@ -361,31 +412,41 @@ class ChatAPI {
             }
         }
 
-        const response = await fetch(fetchEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': apiKey,
-                'ngrok-skip-browser-warning': 'true'
-            },
-            body: JSON.stringify(requestBody),
-            signal
-        });
+        try {
+            const response = await fetch(fetchEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey,
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify(requestBody),
+                signal
+            });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
-        }
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const today = new Date().toISOString().slice(0, 10);
+                this.invalidKeys.set(apiKey, today);
+                throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`);
+            }
 
-        const data = await response.json();
-        if (!data.candidates || data.candidates.length === 0) {
-            return '[The model sent an empty response.]';
-        }
-        const content = data.candidates[0].content;
-        if (content && content.parts) {
-            return content.parts.map(part => part.text).join('');
-        } else {
-            return '[The model sent an empty response.]';
+            const data = await response.json();
+            if (!data.candidates || data.candidates.length === 0) {
+                return '[The model sent an empty response.]';
+            }
+            const content = data.candidates[0].content;
+            if (content && content.parts) {
+                return content.parts.map(part => part.text).join('');
+            } else {
+                return '[The model sent an empty response.]';
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                const today = new Date().toISOString().slice(0, 10);
+                this.invalidKeys.set(apiKey, today);
+            }
+            throw error;
         }
     }
 

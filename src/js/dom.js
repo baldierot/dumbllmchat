@@ -31,4 +31,7 @@ export const dom = {
     attachFileBtn: document.getElementById('attach-file-btn'),
     attachedFilesContainer: document.getElementById('attached-files-container'),
     cancelEditBtn: document.getElementById('cancel-edit-btn'),
+    addApiKeyBtn: document.getElementById('add-api-key-btn'),
+    proxyUrl: document.getElementById('proxy-url'),
+    apiKeysContainer: document.getElementById('api-keys-container'),
 };

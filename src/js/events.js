@@ -1,5 +1,5 @@
 import { dom } from './dom.js';
-import { showMessageControls, removeMessageControls, renderConversations, updateTokenCountDisplay, renderLlmConfigs, renderAttachedFiles } from './ui.js';
+import { showMessageControls, removeMessageControls, renderConversations, updateTokenCountDisplay, renderLlmConfigs, renderGlobalSettings, addApiKeyInput, renderAttachedFiles } from './ui.js';
 
 export function initializeEventListeners(app) {
     dom.chatContainer.addEventListener('message-selected', (e) => {
@@ -193,6 +193,7 @@ export function initializeEventListeners(app) {
     });
 
     dom.settingsBtn.addEventListener('click', () => {
+        renderGlobalSettings(app.chatAPI);
         renderLlmConfigs(app.chatAPI);
         dom.settingsModal.classList.remove('hidden');
     });
@@ -204,26 +205,31 @@ export function initializeEventListeners(app) {
     dom.addModelBtn.addEventListener('click', () => {
         app.chatAPI.addModel({
             modelName: 'gemini-2.5-flash-lite',
-            apiKey: '',
             nickname: 'New Model',
             temperature: 0.7,
             system_prompt: 'You are a helpful assistant.',
             maxOutputTokens: 8192,
-            proxy: ''
         });
         renderLlmConfigs(app.chatAPI);
     });
 
+    dom.addApiKeyBtn.addEventListener('click', () => {
+        addApiKeyInput();
+    });
+
     dom.saveSettingsBtn.addEventListener('click', async (e) => {
         e.preventDefault();
+
+        const apiKeys = Array.from(document.querySelectorAll('.api-key-input')).map(input => input.value.trim()).filter(key => key);
+        const proxy = dom.proxyUrl.value.trim();
+        app.chatAPI.saveGlobalSettings({ apiKeys, proxy });
+
         const newModels = Array.from(dom.llmConfigsContainer.children).map(configDiv => {
             return {
                 modelName: configDiv.querySelector('input[placeholder="Model Name"]').value,
                 nickname: configDiv.querySelector('input[placeholder="Nickname"]').value,
-                apiKey: configDiv.querySelector('input[placeholder="API Key"]').value,
                 temperature: parseFloat(configDiv.querySelector('input[placeholder="Temperature"]').value),
                 maxOutputTokens: parseInt(configDiv.querySelector('input[placeholder="Max Output Tokens"]').value, 10),
-                proxy: configDiv.querySelector('input[placeholder="Proxy URL"]').value,
                 system_prompt: configDiv.querySelector('textarea').value,
                 useGoogleSearch: configDiv.querySelector('input[id^="google-search-checkbox-"]').checked,
                 useUrlContext: configDiv.querySelector('input[id^="url-context-checkbox-"]').checked,
