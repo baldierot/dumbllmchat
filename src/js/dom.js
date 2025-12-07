@@ -33,6 +33,8 @@ export const dom = {
     addApiKeyBtn: document.getElementById('add-api-key-btn'),
     proxyUrl: document.getElementById('proxy-url'),
     apiKeysContainer: document.getElementById('api-keys-container'),
+    sequentialWorkflowRequests: document.getElementById('sequential-workflow-requests'),
+    workflowRequestDelay: document.getElementById('workflow-request-delay'),
 
     // Settings Tabs
     settingsTabs: document.getElementById('settings-tabs'),

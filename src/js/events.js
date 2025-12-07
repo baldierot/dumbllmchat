@@ -249,7 +249,9 @@ export function initializeEventListeners(app) {
 
         const apiKeys = Array.from(document.querySelectorAll('.api-key-input')).map(input => input.value.trim()).filter(key => key);
         const proxy = dom.proxyUrl.value.trim();
-        app.chatAPI.saveGlobalSettings({ apiKeys, proxy });
+        const workflowRequestDelay = parseFloat(dom.workflowRequestDelay.value);
+        const sequentialWorkflowRequests = dom.sequentialWorkflowRequests.checked;
+        app.chatAPI.saveGlobalSettings({ apiKeys, proxy, workflowRequestDelay, sequentialWorkflowRequests });
 
         const newModels = Array.from(dom.llmConfigsContainer.children).map(configDiv => {
             const type = configDiv.querySelector('.model-type-selector').value;

@@ -7,6 +7,10 @@ const NodeStatus = {
     FAILED: 'FAILED'
 };
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export class WorkflowEngine {
     constructor(chatAPI) {
         this.chatAPI = chatAPI;
@@ -84,30 +88,106 @@ export class WorkflowEngine {
             lastRunnableCount = runnableNodes.length;
 
 
-            const promises = runnableNodes.map(async node => {
+            // Filter nodes into static and LLM types
+            const runnableLlmNodes = runnableNodes.filter(node => node.type === 'llm');
+            const runnableStaticNodes = runnableNodes.filter(node => node.type === 'static');
+
+            // Process static nodes in parallel
+            const staticPromises = runnableStaticNodes.map(async node => {
                 nodeStates.set(node.id, NodeStatus.RUNNING);
-                
-                if (node.type === 'static') {
-                    progressCallback(`Resolving: ${node.id}`);
+                progressCallback(`Resolving: ${node.id}`);
+                try {
+                    let content = node.prompt.replace(/\{\{INPUT\}\}/g, userInput);
+                    // Explicit dependencies for static nodes
+                    if (node.explicitDependencies) {
+                        node.explicitDependencies.forEach(depId => {
+                            const regex = new RegExp(`\\{\\{#${depId}\\}\\}`, 'g');
+                            content = content.replace(regex, outputs.get(depId) || '');
+                        });
+                    }
+                    outputs.set(node.id, content);
+                    nodeStates.set(node.id, NodeStatus.COMPLETED);
+                    progressCallback(`Completed: ${node.id}`);
+                } catch (error) {
+                    nodeStates.set(node.id, NodeStatus.FAILED);
+                    progressCallback(`Failed: ${node.id} - ${error.message}`);
+                    throw new Error(`Error resolving static node ${node.id}: ${error.message}`);
+                }
+            });
+            await Promise.all(staticPromises);
+
+            // Process LLM nodes based on the sequential setting
+            if (this.chatAPI.sequentialWorkflowRequests) {
+                // Sequential processing for LLM nodes
+                for (let i = 0; i < runnableLlmNodes.length; i++) {
+                    const node = runnableLlmNodes[i];
+                    nodeStates.set(node.id, NodeStatus.RUNNING);
+
                     try {
-                        // Process dependencies/variables in static content
-                        let content = node.prompt.replace(/\{\{INPUT\}\}/g, userInput);
+                        let modelToUse = node.model;
+                        if (node.modelVariable) {
+                            modelToUse = outputs.get(node.modelVariable);
+                            if (!modelToUse) {
+                                throw new Error(`Could not resolve model variable "${node.modelVariable}"`);
+                            }
+                        }
+                        
+                        progressCallback(`Running: ${node.id} (${modelToUse})`);
+
+                        // 1. Construct Prompt (same logic as before)
+                        let prompt = node.prompt.replace(/\{\{INPUT\}\}/g, userInput);
+                        const promptDeps = new Set();
+
                         if (node.explicitDependencies) {
                             node.explicitDependencies.forEach(depId => {
                                 const regex = new RegExp(`\\{\\{#${depId}\\}\\}`, 'g');
-                                content = content.replace(regex, outputs.get(depId) || '');
+                                prompt = prompt.replace(regex, outputs.get(depId));
+                                promptDeps.add(depId);
                             });
                         }
-                        outputs.set(node.id, content);
+
+                        const implicitDepsToPrepend = (node.children || [])
+                            .filter(childId => !promptDeps.has(childId))
+                            .map(childId => outputs.get(childId))
+                            .join('\n\n');
+                        
+                        if (implicitDepsToPrepend) {
+                            prompt = `${implicitDepsToPrepend}\n\n${prompt}`;
+                        }
+                        
+                        // 2. Construct Messages (same logic as before)
+                        let messages = [];
+                        const useHistory = node.flags && node.flags.includes('history');
+                        
+                        if (useHistory) {
+                            messages = await this.chatAPI.getMessages() || [];
+                            messages.push({ sender: 'User', content: prompt });
+                        } else {
+                            messages = [{ sender: 'User', content: prompt }];
+                        }
+
+                        // Apply delay before making API call, but skip for the very first LLM node in the batch
+                        if (this.chatAPI.workflowRequestDelay > 0 && i > 0) {
+                            progressCallback(`Waiting for ${this.chatAPI.workflowRequestDelay} seconds...`);
+                            await sleep(this.chatAPI.workflowRequestDelay * 1000);
+                        }
+
+                        // 3. Call API (same logic as before)
+                        const result = await this.chatAPI.generateFromModel(modelToUse, messages, node.flags);
+                        outputs.set(node.id, result);
                         nodeStates.set(node.id, NodeStatus.COMPLETED);
                         progressCallback(`Completed: ${node.id}`);
+
                     } catch (error) {
                         nodeStates.set(node.id, NodeStatus.FAILED);
                         progressCallback(`Failed: ${node.id} - ${error.message}`);
-                        throw new Error(`Error resolving static node ${node.id}: ${error.message}`);
+                        throw new Error(`Error executing node ${node.id}: ${error.message}`);
                     }
-                } else {
-                    // LLM Node
+                }
+            } else {
+                // Parallel processing for LLM nodes (original behavior with pre-call delay)
+                const llmPromises = runnableLlmNodes.map(async node => {
+                    nodeStates.set(node.id, NodeStatus.RUNNING);
                     try {
                         let modelToUse = node.model;
                         if (node.modelVariable) {
@@ -123,7 +203,6 @@ export class WorkflowEngine {
                         let prompt = node.prompt.replace(/\{\{INPUT\}\}/g, userInput);
                         const promptDeps = new Set();
 
-                        // Explicit dependencies
                         if (node.explicitDependencies) {
                             node.explicitDependencies.forEach(depId => {
                                 const regex = new RegExp(`\\{\\{#${depId}\\}\\}`, 'g');
@@ -132,7 +211,6 @@ export class WorkflowEngine {
                             });
                         }
 
-                        // Implicit dependencies (prepend)
                         const implicitDepsToPrepend = (node.children || [])
                             .filter(childId => !promptDeps.has(childId))
                             .map(childId => outputs.get(childId))
@@ -153,6 +231,12 @@ export class WorkflowEngine {
                             messages = [{ sender: 'User', content: prompt }];
                         }
 
+                        // Apply delay before making API call for LLM nodes in parallel mode
+                        if (this.chatAPI.workflowRequestDelay > 0) {
+                            progressCallback(`Waiting for ${this.chatAPI.workflowRequestDelay} seconds before ${node.id}...`);
+                            await sleep(this.chatAPI.workflowRequestDelay * 1000);
+                        }
+
                         // 3. Call API
                         const result = await this.chatAPI.generateFromModel(modelToUse, messages, node.flags);
                         outputs.set(node.id, result);
@@ -164,10 +248,9 @@ export class WorkflowEngine {
                         progressCallback(`Failed: ${node.id} - ${error.message}`);
                         throw new Error(`Error executing node ${node.id}: ${error.message}`);
                     }
-                }
-            });
-
-            await Promise.all(promises);
+                });
+                await Promise.all(llmPromises);
+            }
             
             // Small delay to prevent tight loops in case of issues
             await new Promise(resolve => setTimeout(resolve, 50));

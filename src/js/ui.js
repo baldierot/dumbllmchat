@@ -302,6 +302,8 @@ export function renderLlmConfigs(chatAPI) {
 export function renderGlobalSettings(chatAPI) {
     const globalSettings = chatAPI.getGlobalSettings();
     dom.proxyUrl.value = globalSettings.proxy || '';
+    dom.sequentialWorkflowRequests.checked = globalSettings.sequentialWorkflowRequests ?? true;
+    dom.workflowRequestDelay.value = globalSettings.workflowRequestDelay || 0;
     dom.apiKeysContainer.innerHTML = '';
     globalSettings.apiKeys.forEach(key => {
         addApiKeyInput(key);

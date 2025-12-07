@@ -74,6 +74,14 @@
                                 <input type="text" id="proxy-url" placeholder="Proxy URL" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
                             </div>
                             <div>
+                                <input type="checkbox" id="sequential-workflow-requests" class="mr-2">
+                                <label for="sequential-workflow-requests" class="text-sm font-medium">Process Workflow LLM Requests Sequentially</label>
+                            </div>
+                            <div>
+                                <label for="workflow-request-delay" class="block text-sm font-medium">Workflow Model Request Delay (seconds)</label>
+                                <input type="number" id="workflow-request-delay" placeholder="Delay between model requests in workflow (seconds)" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" min="0" value="0">
+                            </div>
+                            <div>
                                 <label class="block text-sm font-medium">API Keys</label>
                                 <div id="api-keys-container" class="space-y-2">
                                     <!-- API Key inputs will be added here -->
