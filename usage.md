@@ -26,7 +26,7 @@ This is the most common node type. It calls a Large Language Model with a specif
 
 **Components:**
 -   **`#ID`** *(Optional)*: A unique name for the step (e.g., `#researcher`). This is crucial for referencing the node's output in other steps.
--   **`Model_Nickname`** *(Optional)*: Must match a model nickname defined in your **Settings > Models** tab (e.g., `flash-lite`, `pro`).
+-   **`Model_Nickname`** *(Optional)*: Must match a model nickname defined in your **Settings > Models** tab (e.g., `flash-lite`, `pro`). Can also be a reference to a static variable (e.g. `#MAIN_MODEL`).
 -   **`+flags`** *(Optional)*: Space-separated keywords that enable tools for this specific step.
     -   `+history`: Sends the entire chat history to the node.
     -   `+google`: Enables Google Search.
@@ -79,6 +79,19 @@ The engine intelligently combines node outputs:
 
 1.  **Explicit Injection:** If a parent node's prompt includes `{{#ChildID}}`, the child's output is inserted at that exact spot.
 2.  **Implicit Prepending:** If a parent *doesn't* explicitly use `{{#ChildID}}` for one of its immediate children, that child's output is automatically added to the very top of the parent's prompt, separated by newlines. This is useful for providing context before an instruction.
+
+#### Model Variables
+You can use a static variable to define a model name and reuse it across multiple nodes. This makes it easy to swap models in the future without editing every line. To use a variable for the model name, use its `#ID`.
+
+```text
+#MAIN_MODEL = pro
+
+// The engine will use the 'pro' model for this step
+#step1 #MAIN_MODEL: Analyze this text...
+
+// This step also uses the 'pro' model
+#step2 #MAIN_MODEL: Summarize the analysis from {{#step1}}
+```
 
 ---
 

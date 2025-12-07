@@ -81,14 +81,20 @@ export class WorkflowParser {
         const colonIndex = line.indexOf(':');
         if (colonIndex === -1) {
             const parts = line.split(/\s+/).filter(Boolean);
-            let id = null, model = null, flags = [];
+            let id = null, model = null, modelVariable = null, flags = [];
             let partIndex = 0;
+
             if (parts[partIndex]?.startsWith('#')) {
                 id = parts[partIndex].substring(1);
                 partIndex++;
             }
             if(partIndex < parts.length && !parts[partIndex].startsWith('+')) {
-                model = parts[partIndex];
+                const modelPart = parts[partIndex];
+                if (modelPart.startsWith('#')) {
+                    modelVariable = modelPart.substring(1);
+                } else {
+                    model = modelPart;
+                }
                 partIndex++;
             }
              while (partIndex < parts.length) {
@@ -97,21 +103,26 @@ export class WorkflowParser {
                 }
                 partIndex++;
             }
-            return (id || model) ? { id, model, type: 'llm', prompt: "", indentLevel, flags } : null;
+            return (id || model || modelVariable) ? { id, model, modelVariable, type: 'llm', prompt: "", indentLevel, flags } : null;
         }
 
         const before = line.substring(0, colonIndex).trim();
         const prompt = line.substring(colonIndex + 1).trim();
         const parts = before.split(/\s+/).filter(Boolean);
         
-        let id = null, model = null, flags = [], partIndex = 0;
+        let id = null, model = null, modelVariable = null, flags = [], partIndex = 0;
         
         if (parts[partIndex]?.startsWith('#')) {
             id = parts[partIndex].substring(1);
             partIndex++;
         }
         if (partIndex < parts.length && !parts[partIndex].startsWith('+')) {
-            model = parts[partIndex];
+            const modelPart = parts[partIndex];
+            if (modelPart.startsWith('#')) {
+                modelVariable = modelPart.substring(1);
+            } else {
+                model = modelPart;
+            }
             partIndex++;
         }
         while (partIndex < parts.length) {
@@ -121,9 +132,9 @@ export class WorkflowParser {
             partIndex++;
         }
 
-        if (!id && !model) return null;
+        if (!id && !model && !modelVariable) return null;
 
-        const type = model ? 'llm' : 'static';
-        return { id, model, type, prompt, indentLevel, flags };
+        const type = (model || modelVariable) ? 'llm' : 'static';
+        return { id, model, modelVariable, type, prompt, indentLevel, flags };
     }
 }

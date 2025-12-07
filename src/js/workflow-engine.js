@@ -21,9 +21,22 @@ export class WorkflowEngine {
 
         // --- Upfront Model Validation ---
         const availableModels = this.chatAPI.getModels().map(m => m.nickname.toLowerCase());
-        const requiredModels = new Set(
-            nodes.filter(n => n.type === 'llm' && n.model).map(n => n.model.toLowerCase())
-        );
+        const staticVars = new Map(nodes.filter(n => n.type === 'static').map(n => [n.id, n.prompt]));
+
+        const requiredModels = new Set();
+        nodes.filter(n => n.type === 'llm').forEach(n => {
+            if (n.model) {
+                requiredModels.add(n.model.toLowerCase());
+            } else if (n.modelVariable) {
+                const resolvedModel = staticVars.get(n.modelVariable);
+                if (resolvedModel) {
+                    requiredModels.add(resolvedModel.toLowerCase());
+                } else {
+                    // This case implies a dependency on a non-static node, which the engine will handle.
+                    // Or it's a dependency on a missing node, which will be caught by the dependency checks.
+                }
+            }
+        });
         
         const undefinedModels = [...requiredModels].filter(m => !availableModels.includes(m));
         if (undefinedModels.length > 0) {
@@ -95,8 +108,17 @@ export class WorkflowEngine {
                     }
                 } else {
                     // LLM Node
-                    progressCallback(`Running: ${node.id} (${node.model})`);
                     try {
+                        let modelToUse = node.model;
+                        if (node.modelVariable) {
+                            modelToUse = outputs.get(node.modelVariable);
+                            if (!modelToUse) {
+                                throw new Error(`Could not resolve model variable "${node.modelVariable}"`);
+                            }
+                        }
+                        
+                        progressCallback(`Running: ${node.id} (${modelToUse})`);
+
                         // 1. Construct Prompt
                         let prompt = node.prompt.replace(/\{\{INPUT\}\}/g, userInput);
                         const promptDeps = new Set();
@@ -132,7 +154,7 @@ export class WorkflowEngine {
                         }
 
                         // 3. Call API
-                        const result = await this.chatAPI.generateFromModel(node.model, messages, node.flags);
+                        const result = await this.chatAPI.generateFromModel(modelToUse, messages, node.flags);
                         outputs.set(node.id, result);
                         nodeStates.set(node.id, NodeStatus.COMPLETED);
                         progressCallback(`Completed: ${node.id}`);
