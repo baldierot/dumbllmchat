@@ -11,6 +11,8 @@ class ChatAPI {
         this.apiKeys = [];
         this.proxy = '';
         this.invalidKeys = new Map();
+        this.workflowRequestDelay = 0; // Initialize
+        this.sequentialWorkflowRequests = true; // Initialize
         this.init();
     }
 
@@ -18,6 +20,8 @@ class ChatAPI {
         const globalSettings = this.getGlobalSettings();
         this.apiKeys = globalSettings.apiKeys || [];
         this.proxy = globalSettings.proxy || '';
+        this.workflowRequestDelay = globalSettings.workflowRequestDelay || 0;
+        this.sequentialWorkflowRequests = globalSettings.sequentialWorkflowRequests ?? true;
 
         await this.fetchAndSetModels();
         this.conversations = await window.db.getConversations();
@@ -179,13 +183,14 @@ class ChatAPI {
 
     getGlobalSettings() {
         const settings = localStorage.getItem('global_settings');
-        return settings ? JSON.parse(settings) : { apiKeys: [], proxy: '' };
+        return settings ? JSON.parse(settings) : { apiKeys: [], proxy: '', workflowRequestDelay: 0 };
     }
 
     saveGlobalSettings(settings) {
         localStorage.setItem('global_settings', JSON.stringify(settings));
         this.apiKeys = settings.apiKeys || [];
         this.proxy = settings.proxy || '';
+        this.workflowRequestDelay = settings.workflowRequestDelay || 0;
     }
 
     getApiKey() {
@@ -486,11 +491,9 @@ class ChatAPI {
                 stop: []
             };
 
-            if (modelConfig.reasoningEffort && modelConfig.reasoningEffort.trim() !== '') {
+            if (modelConfig.reasoningEffort) {
                 requestBody.include_reasoning = true;
                 requestBody.reasoning_effort = modelConfig.reasoningEffort;
-            } else {
-                requestBody.include_reasoning = false;
             }
             // Groq specific: prependSystemPrompt is handled by system role, so no need for special handling here.
             // Tools are not directly supported in the same way for OpenAI-compatible as Gemini.

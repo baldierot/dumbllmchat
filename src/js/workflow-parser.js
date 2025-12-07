@@ -63,6 +63,24 @@ export class WorkflowParser {
             }
         });
 
+        // Cycle detection: If a child has an explicit dependency on its parent,
+        // remove the implicit parent->child dependency to break the deadlock.
+        nodes.forEach(node => {
+            if (!node.children || node.children.length === 0) return;
+
+            const childrenToRemove = new Set();
+            for (const childId of node.children) {
+                const childNode = nodeMap.get(childId);
+                if (childNode && childNode.explicitDependencies.includes(node.id)) {
+                    childrenToRemove.add(childId);
+                }
+            }
+
+            if (childrenToRemove.size > 0) {
+                node.children = node.children.filter(childId => !childrenToRemove.has(childId));
+            }
+        });
+
         return nodes;
     }
 
