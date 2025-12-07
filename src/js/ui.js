@@ -233,13 +233,23 @@ export function renderLlmConfigs(chatAPI) {
                 <h3 class="text-lg font-semibold">${model.nickname}</h3>
                 <button type="button" class="remove-model-btn text-xl" data-index="${index}">➖</button>
             </div>
+            <select class="model-type-selector w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" data-index="${index}">
+                <option value="gemini" ${model.type === 'gemini' ? 'selected' : ''}>Gemini</option>
+                <option value="openai" ${model.type === 'openai' ? 'selected' : ''}>OpenAI Compatible</option>
+            </select>
             <input type="text" value="${model.modelName}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Model Name">
             <input type="text" value="${model.nickname}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nickname">
             <textarea class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="System Prompt">${model.system_prompt}</textarea>
+            <div class="openai-config ${model.type === 'openai' ? '' : 'hidden'}">
+                <input type="text" value="${model.endpoint || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600 openai-endpoint" placeholder="API Endpoint (e.g., https://api.groq.com/openai/v1/chat/completions)">
+                <input type="text" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600 openai-api-key" placeholder="API Key (Leave blank to use Global API Key)">
+
+                <input type="text" value="${model.reasoningEffort || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600 openai-reasoning-effort" placeholder="Reasoning Effort (e.g., none, default, low, medium, high)">
+            </div>
             <input type="number" step="0.1" value="${model.temperature}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Temperature">
             <input type="number" value="${model.maxOutputTokens || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Max Output Tokens">
-            <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Thinking Budget (tokens)">
-            <div class="google-search-container">
+            <input type="number" value="${model.thinkingBudget ?? ''}" class="w-full p-2 mt-2 border rounded dark:bg-gray-700 dark:border-gray-600 ${model.type === 'openai' ? 'hidden' : ''}" placeholder="Thinking Budget (tokens)">
+            <div class="google-search-container ${model.type === 'openai' ? 'hidden' : ''}">
                 <div class="flex items-center mt-2">
                     <input type="checkbox" id="google-search-checkbox-${index}" class="mr-2" ${model.useGoogleSearch ? 'checked' : ''}>
                     <label for="google-search-checkbox-${index}">Enable Google Search</label>
@@ -264,6 +274,29 @@ export function renderLlmConfigs(chatAPI) {
             renderLlmConfigs(chatAPI);
         });
     });
+
+    document.querySelectorAll('.model-type-selector').forEach(select => {
+        select.addEventListener('change', (e) => {
+            const index = e.target.dataset.index;
+            const modelConfigDiv = select.closest('.mb-4');
+            const openaiConfigDiv = modelConfigDiv.querySelector('.openai-config');
+            const thinkingBudgetInput = modelConfigDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]');
+            const googleSearchContainer = modelConfigDiv.querySelector('.google-search-container');
+            
+            if (e.target.value === 'openai') {
+                openaiConfigDiv.classList.remove('hidden');
+                thinkingBudgetInput.classList.add('hidden');
+                googleSearchContainer.classList.add('hidden');
+            } else {
+                openaiConfigDiv.classList.add('hidden');
+                thinkingBudgetInput.classList.remove('hidden');
+                googleSearchContainer.classList.remove('hidden');
+            }
+        });
+    });
+
+
+
 };
 
 export function renderGlobalSettings(chatAPI) {

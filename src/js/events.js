@@ -224,11 +224,18 @@ export function initializeEventListeners(app) {
 
     dom.addModelBtn.addEventListener('click', () => {
         app.chatAPI.addModel({
+            type: 'gemini', // Default to Gemini
             modelName: 'gemini-2.5-flash-lite',
             nickname: 'New Model',
             temperature: 0.7,
             system_prompt: 'You are a helpful assistant.',
             maxOutputTokens: 8192,
+            useGoogleSearch: false,
+            useUrlContext: false,
+            prependSystemPrompt: false,
+            thinkingBudget: 24576,
+
+            reasoningEffort: null
         });
         renderLlmConfigs(app.chatAPI);
     });
@@ -245,17 +252,31 @@ export function initializeEventListeners(app) {
         app.chatAPI.saveGlobalSettings({ apiKeys, proxy });
 
         const newModels = Array.from(dom.llmConfigsContainer.children).map(configDiv => {
-            return {
+            const type = configDiv.querySelector('.model-type-selector').value;
+            const model = {
+                type: type,
                 modelName: configDiv.querySelector('input[placeholder="Model Name"]').value,
                 nickname: configDiv.querySelector('input[placeholder="Nickname"]').value,
                 temperature: parseFloat(configDiv.querySelector('input[placeholder="Temperature"]').value),
                 maxOutputTokens: parseInt(configDiv.querySelector('input[placeholder="Max Output Tokens"]').value, 10),
                 system_prompt: configDiv.querySelector('textarea').value,
-                useGoogleSearch: configDiv.querySelector('input[id^="google-search-checkbox-"]').checked,
-                useUrlContext: configDiv.querySelector('input[id^="url-context-checkbox-"]').checked,
                 prependSystemPrompt: configDiv.querySelector('input[id^="prepend-system-prompt-checkbox-"]').checked,
-                thinkingBudget: parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10),
             };
+
+            if (type === 'gemini') {
+                model.useGoogleSearch = configDiv.querySelector('input[id^="google-search-checkbox-"]').checked;
+                model.useUrlContext = configDiv.querySelector('input[id^="url-context-checkbox-"]').checked;
+                model.thinkingBudget = parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10);
+            } else if (type === 'openai') {
+                model.endpoint = configDiv.querySelector('.openai-endpoint').value;
+                model.apiKey = configDiv.querySelector('.openai-api-key').value;
+
+                model.reasoningEffort = configDiv.querySelector('.openai-reasoning-effort').value.trim();
+                if (model.reasoningEffort === '') {
+                    model.reasoningEffort = null;
+                }
+            }
+            return model;
         });
         await app.chatAPI.saveModels(newModels);
         await populateModelSelector(app.chatAPI);

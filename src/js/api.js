@@ -85,9 +85,10 @@ class ChatAPI {
 
     getModels() {
         const models = localStorage.getItem('llm_models');
-                return models ? JSON.parse(models) : [
+        return models ? JSON.parse(models) : [
             {
-                                                "modelName": "gemini-2.5-flash-lite",
+                "type": "gemini",
+                "modelName": "gemini-2.5-flash-lite",
                 "nickname": "flash-lite",
                 "temperature": 0.7,
                 "maxOutputTokens": 65536,
@@ -97,8 +98,9 @@ class ChatAPI {
                 "prependSystemPrompt": false,
                 "thinkingBudget": 24576
             },
-                        {
-                                                "modelName": "gemini-2.5-pro",
+            {
+                "type": "gemini",
+                "modelName": "gemini-2.5-pro",
                 "nickname": "pro",
                 "temperature": 0.7,
                 "maxOutputTokens": 65536,
@@ -108,11 +110,30 @@ class ChatAPI {
                 "prependSystemPrompt": false,
                 "thinkingBudget": 24576
             },
-            
+            {
+                "type": "openai",
+                "modelName": "llama-3.3-70b-versatile",
+                "nickname": "Groq Llama 3.3",
+                "temperature": 0.7,
+                "maxOutputTokens": 8192, // Default for OpenAI-compatible models, can be configured by user
+                "system_prompt": "You are a helpful assistant.",
+                "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+                "apiKey": "***REMOVED***",
+                "useGoogleSearch": false,
+                "useUrlContext": false,
+                "prependSystemPrompt": false,
+                "reasoningEffort": null
+            }
         ];
     }
 
     async fetchModelInfo(model) {
+        if (model.type === "openai") {
+            // OpenAI-compatible models don't have a direct model info endpoint like Gemini.
+            // maxTokens should be set in the model config itself or default to a reasonable value.
+            return { ...model, maxTokens: model.maxOutputTokens || 8192 };
+        }
+
         const { modelName } = model;
         const apiKey = this.getApiKey();
         if (!apiKey) return { ...model, maxTokens: 0 };
@@ -149,7 +170,7 @@ class ChatAPI {
 
     async saveModels(models) {
         const modelsToSave = models.map(m => {
-            const { maxTokens, apiKey, proxy, ...rest } = m;
+            const { maxTokens, ...rest } = m;
             return rest;
         });
         localStorage.setItem('llm_models', JSON.stringify(modelsToSave));
@@ -271,7 +292,16 @@ class ChatAPI {
 
     async countTokens(messages) {
         const currentModel = this.getCurrentModel();
-        const { modelName } = currentModel;
+        const { type, modelName } = currentModel;
+        
+        if (type === 'openai') {
+            // OpenAI-compatible APIs typically do not have a dedicated token counting endpoint.
+            // For now, return a heuristic or a default value.
+            // A more accurate solution would involve a tokenizer library, but that's out of scope for now.
+            const textContent = messages.map(msg => msg.content).join(' ');
+            return Math.ceil(textContent.length / 4); // ~4 chars per token is a common heuristic
+        }
+
         const apiKey = this.getApiKey();
         if (!apiKey) {
             throw new Error('No valid API key available.');
@@ -331,83 +361,148 @@ class ChatAPI {
     }
 
     async _makeApiRequest(modelConfig, messages, tools = [], signal) {
-        const { modelName, temperature, system_prompt, maxOutputTokens, prependSystemPrompt, thinkingBudget } = modelConfig;
+        const { type, modelName, temperature, system_prompt, maxOutputTokens, prependSystemPrompt, thinkingBudget, endpoint } = modelConfig;
 
-        const apiKey = this.getApiKey();
-        if (!apiKey) {
-            throw new Error('No valid API key available.');
+        let apiKey = this.getApiKey(); // Use global API key by default
+        if (type === 'openai' && modelConfig.apiKey) {
+            apiKey = modelConfig.apiKey; // Override with model-specific API key if available
+        }
+        
+        if (!apiKey && type !== 'gemini') { // Gemini can work without API key for some public models
+             throw new Error('No valid API key available for this model type.');
         }
 
         const normalizedProxy = normalizeProxyUrl(this.proxy);
-        const fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+        let fetchEndpoint;
+        let requestBody;
+        let headers = {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+        };
 
-        const googleMessages = messages.map(msg => {
+        const mappedMessages = messages.map(msg => {
             const parts = [{ text: msg.content }];
             if (msg.files) {
-                msg.files.forEach(file => {
-                    parts.push({
-                        inline_data: {
-                            mime_type: file.type,
-                            data: file.data.split(',')[1]
-                        }
+                // OpenAI-compatible APIs typically don't support inline image data in this format
+                // For now, we'll strip file data for OpenAI-compatible calls.
+                // A more robust solution might involve sending image URLs if the API supports it.
+                if (type === 'gemini') {
+                    msg.files.forEach(file => {
+                        parts.push({
+                            inline_data: {
+                                mime_type: file.type,
+                                data: file.data.split(',')[1]
+                            }
+                        });
                     });
-                });
+                } else {
+                    console.warn("Files are not supported for OpenAI-compatible models in this implementation.");
+                }
             }
             return {
-                role: msg.sender === 'User' ? 'user' : 'model',
-                parts: parts
+                role: msg.sender === 'User' ? 'user' : (msg.sender === 'Assistant' ? 'assistant' : 'system'), // OpenAI uses 'assistant' for model responses
+                content: msg.content
             };
         });
 
-        if (prependSystemPrompt) {
-            const lastMessage = googleMessages[googleMessages.length - 1];
-            if (lastMessage.role === 'user') {
-                lastMessage.parts[0].text = `${system_prompt}\n\n${lastMessage.parts[0].text}`;
+        if (type === 'gemini') {
+            fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+            headers['x-goog-api-key'] = apiKey;
+
+            let geminiMessages = messages.map(msg => {
+                const parts = [{ text: msg.content }];
+                if (msg.files) {
+                    msg.files.forEach(file => {
+                        parts.push({
+                            inline_data: {
+                                mime_type: file.type,
+                                data: file.data.split(',')[1]
+                            }
+                        });
+                    });
+                }
+                return {
+                    role: msg.sender === 'User' ? 'user' : 'model',
+                    parts: parts
+                };
+            });
+
+            if (prependSystemPrompt) {
+                const lastMessage = geminiMessages[geminiMessages.length - 1];
+                if (lastMessage.role === 'user') {
+                    lastMessage.parts[0].text = `${system_prompt}\n\n${lastMessage.parts[0].text}`;
+                }
             }
-        }
 
-        const requestBody = {
-            contents: googleMessages,
-            generationConfig: {
-                temperature,
-                topK: 1,
-                topP: 1,
-                maxOutputTokens: maxOutputTokens || 2048,
-                stopSequences: []
-            },
-            safetySettings: [
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-            ]
-        };
-
-        if (!prependSystemPrompt && system_prompt) {
-            requestBody.systemInstruction = {
-                role: 'user', // System instructions are weirdly role 'user' for Gemini
-                parts: [{ text: system_prompt }]
+            requestBody = {
+                contents: geminiMessages,
+                generationConfig: {
+                    temperature,
+                    topK: 1,
+                    topP: 1,
+                    maxOutputTokens: maxOutputTokens || 2048,
+                    stopSequences: []
+                },
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                ]
             };
-        }
 
-        if (tools.length > 0) {
-            requestBody.tools = tools;
-        }
-        
-        if (thinkingBudget) {
-            requestBody.generationConfig.thinkingConfig = {
-                thinkingBudget: thinkingBudget
+            if (!prependSystemPrompt && system_prompt) {
+                requestBody.systemInstruction = {
+                    role: 'user', // System instructions are weirdly role 'user' for Gemini
+                    parts: [{ text: system_prompt }]
+                };
             }
+
+            if (tools.length > 0) {
+                requestBody.tools = tools;
+            }
+            
+            if (thinkingBudget) {
+                requestBody.generationConfig.thinkingConfig = {
+                    thinkingBudget: thinkingBudget
+                }
+            }
+
+        } else if (type === 'openai') {
+            fetchEndpoint = normalizedProxy + (endpoint || "https://api.openai.com/v1/chat/completions");
+            headers['Authorization'] = `Bearer ${apiKey}`;
+
+            const openAIMessages = [];
+            if (system_prompt) {
+                openAIMessages.push({ role: 'system', content: system_prompt });
+            }
+            openAIMessages.push(...mappedMessages);
+
+            requestBody = {
+                model: modelName,
+                messages: openAIMessages,
+                temperature: temperature,
+                max_tokens: maxOutputTokens || 2048,
+                stop: []
+            };
+
+            if (modelConfig.reasoningEffort && modelConfig.reasoningEffort.trim() !== '') {
+                requestBody.include_reasoning = true;
+                requestBody.reasoning_effort = modelConfig.reasoningEffort;
+            } else {
+                requestBody.include_reasoning = false;
+            }
+            // Groq specific: prependSystemPrompt is handled by system role, so no need for special handling here.
+            // Tools are not directly supported in the same way for OpenAI-compatible as Gemini.
+            // For now, no tool handling for OpenAI-compatible models.
+        } else {
+            throw new Error(`Unsupported model type: ${type}`);
         }
 
         try {
             const response = await fetch(fetchEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': apiKey,
-                    'ngrok-skip-browser-warning': 'true'
-                },
+                headers: headers,
                 body: JSON.stringify(requestBody),
                 signal
             });
@@ -420,18 +515,25 @@ class ChatAPI {
             }
 
             const data = await response.json();
-            if (!data.candidates || data.candidates.length === 0) {
-                const stopReason = data.promptFeedback?.blockReason;
-                if (stopReason) {
-                    return `[The model blocked the response. Reason: ${stopReason}]`;
+            if (type === 'gemini') {
+                if (!data.candidates || data.candidates.length === 0) {
+                    const stopReason = data.promptFeedback?.blockReason;
+                    if (stopReason) {
+                        return `[The model blocked the response. Reason: ${stopReason}]`;
+                    }
+                    return '[The model sent an empty response.]';
                 }
-                return '[The model sent an empty response.]';
-            }
-            const content = data.candidates[0].content;
-            if (content && content.parts) {
-                return content.parts.map(part => part.text).join('');
-            } else {
-                return '[The model sent an empty response.]';
+                const content = data.candidates[0].content;
+                if (content && content.parts) {
+                    return content.parts.map(part => part.text).join('');
+                } else {
+                    return '[The model sent an empty response.]';
+                }
+            } else if (type === 'openai') {
+                if (!data.choices || data.choices.length === 0) {
+                     return '[The model sent an empty response.]';
+                }
+                return data.choices[0].message.content;
             }
         } catch (error) {
             if (error.name !== 'AbortError') {
