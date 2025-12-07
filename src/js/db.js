@@ -1,7 +1,8 @@
 const DB_NAME = 'dumbllmchat_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const MESSAGES_STORE_NAME = 'messages';
 const CONVERSATIONS_STORE_NAME = 'conversations';
+const WORKFLOWS_STORE_NAME = 'workflows';
 
 let db;
 
@@ -35,6 +36,9 @@ function openDB() {
                 if (!messagesStore.indexNames.contains('conversationId')) {
                     messagesStore.createIndex('conversationId', 'conversationId', { unique: false });
                 }
+            }
+            if (!db.objectStoreNames.contains(WORKFLOWS_STORE_NAME)) {
+                db.createObjectStore(WORKFLOWS_STORE_NAME, { keyPath: 'id' });
             }
         };
     });
@@ -227,6 +231,54 @@ async function importConversation(conversationData) {
     }
 }
 
+async function getWorkflows() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([WORKFLOWS_STORE_NAME], 'readonly');
+        const store = transaction.objectStore(WORKFLOWS_STORE_NAME);
+        const request = store.getAll();
+        request.onerror = event => reject(`Error getting workflows: ${event.target.error}`);
+        request.onsuccess = event => resolve(event.target.result);
+    });
+}
+
+async function addWorkflow(workflow) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        if (!workflow.id) {
+            // Use a simpler ID to avoid potential crypto API issues
+            workflow.id = `workflow_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        }
+        const transaction = db.transaction([WORKFLOWS_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(WORKFLOWS_STORE_NAME);
+        const request = store.add(workflow);
+        request.onerror = event => reject(`Error adding workflow: ${event.target.error}`);
+        request.onsuccess = event => resolve(workflow.id); // Resolve with the ID
+    });
+}
+
+async function updateWorkflow(workflow) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([WORKFLOWS_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(WORKFLOWS_STORE_NAME);
+        const request = store.put(workflow);
+        request.onerror = event => reject(`Error updating workflow: ${event.target.error}`);
+        request.onsuccess = event => resolve(event.target.result);
+    });
+}
+
+async function deleteWorkflow(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([WORKFLOWS_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(WORKFLOWS_STORE_NAME);
+        const request = store.delete(id);
+        request.onerror = event => reject(`Error deleting workflow: ${event.target.error}`);
+        request.onsuccess = () => resolve();
+    });
+}
+
 window.db = {
     getConversations,
     addConversation,
@@ -237,5 +289,9 @@ window.db = {
     updateMessage,
     removeMessage,
     clearMessages,
-    importConversation
+    importConversation,
+    getWorkflows,
+    addWorkflow,
+    updateWorkflow,
+    deleteWorkflow
 };

@@ -1,4 +1,5 @@
 import { dom } from './dom.js';
+import { WorkflowEngine } from './workflow-engine.js';
 
 let selectedMessage = null;
 
@@ -70,19 +71,43 @@ export function showMessageControls(messageElement, x, y, app) {
             removeMessageControls();
             dom.sendBtn.disabled = true;
 
-            const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
-            app.chatView.appendMessage(pendingMessage);
+            const tempId = 'temp-' + Date.now();
+            app.chatView.appendMessage({ sender: 'Assistant', content: '...', id: tempId }, true);
 
-            const response = await app.chatAPI.sendMessage(newMessages);
-            
-            app.chatView.removeMessage(-1);
+            try {
+                if (app.chatAPI.currentWorkflowId) {
+                    // WORKFLOW MODE
+                    const workflows = await window.db.getWorkflows();
+                    const wf = workflows.find(w => w.id === app.chatAPI.currentWorkflowId);
+                    if (!wf) throw new Error('Selected workflow not found.');
 
-            if (response) {
-                app.chatView.appendMessage(response);
+                    const engine = new WorkflowEngine(app.chatAPI);
+                    const callback = (status) => updateStatusMessage(tempId, status);
+                    
+                    const result = await engine.execute(wf.script, lastMessage.content, callback);
+                    
+                    app.chatView.removeMessage(tempId);
+                    const assistantMsg = await app.chatAPI.addMessage({ sender: 'Assistant', content: result });
+                    app.chatView.appendMessage(assistantMsg);
+
+                } else {
+                    // MODEL MODE
+                    const response = await app.chatAPI.sendMessage(newMessages);
+                    app.chatView.removeMessage(tempId);
+                    if (response) {
+                        app.chatView.appendMessage(response);
+                    }
+                }
+            } catch (err) {
+                app.chatView.removeMessage(tempId);
+                const errorMsg = { sender: 'Error', content: err.message, id: Date.now() };
+                app.chatView.appendMessage(errorMsg);
+            } finally {
+                dom.sendBtn.disabled = false;
+                if (!app.chatAPI.currentWorkflowId) {
+                    updateTokenCountDisplay(app.chatAPI);
+                }
             }
-            dom.sendBtn.disabled = false;
-            dom.messageInput.focus();
-            updateTokenCountDisplay(app.chatAPI);
         }
     });
 
@@ -298,3 +323,123 @@ export function renderAttachedFiles(app) {
         dom.footer.style.height = `${minHeight}px`;
     }
 };
+
+export function switchSettingsTab(tabName) {
+    // Hide all tabs
+    dom.tabGlobal.classList.add('hidden');
+    dom.tabModels.classList.add('hidden');
+    dom.tabWorkflows.classList.add('hidden');
+
+    // Deactivate all tab buttons
+    dom.settingsTabs.querySelectorAll('button').forEach(btn => {
+        btn.classList.remove('border-blue-500', 'text-blue-500');
+        btn.classList.add('text-gray-500');
+    });
+
+    // Show the selected tab and activate the button
+    const activeTab = dom.settingsTabs.querySelector(`[data-tab="${tabName}"]`);
+    const tabContent = document.getElementById(`tab-${tabName}`);
+    if (activeTab && tabContent) {
+        tabContent.classList.remove('hidden');
+        activeTab.classList.add('border-blue-500', 'text-blue-500');
+        activeTab.classList.remove('text-gray-500');
+    }
+}
+
+export async function renderWorkflowsList(app) {
+    const workflows = await window.db.getWorkflows();
+    dom.workflowsList.innerHTML = '';
+    if (!workflows || workflows.length === 0) {
+        dom.workflowsList.innerHTML = '<p class="text-gray-500">No workflows created yet.</p>';
+        return;
+    }
+
+    workflows.forEach(workflow => {
+        const item = document.createElement('div');
+        item.className = 'flex justify-between items-center p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = workflow.name;
+        item.appendChild(nameSpan);
+
+        const buttonsDiv = document.createElement('div');
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✏️';
+        editBtn.className = 'mr-2';
+        editBtn.onclick = () => openWorkflowEditor(app, workflow);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '🗑️';
+        deleteBtn.onclick = async () => {
+            if (confirm(`Are you sure you want to delete workflow "${workflow.name}"?`)) {
+                await window.db.deleteWorkflow(workflow.id);
+                renderWorkflowsList(app);
+            }
+        };
+
+        buttonsDiv.appendChild(editBtn);
+        buttonsDiv.appendChild(deleteBtn);
+        item.appendChild(buttonsDiv);
+        dom.workflowsList.appendChild(item);
+    });
+}
+
+export function openWorkflowEditor(app, workflow = null) {
+    if (workflow) {
+        // Edit mode
+        app.editingWorkflowId = workflow.id;
+        dom.workflowNameInput.value = workflow.name;
+        dom.workflowScriptInput.value = workflow.script;
+    } else {
+        // Add mode
+        app.editingWorkflowId = null;
+        dom.workflowNameInput.value = '';
+        dom.workflowScriptInput.value = '';
+    }
+    dom.workflowEditorOverlay.classList.remove('hidden');
+}
+
+export async function populateModelSelector(chatAPI) {
+    const models = chatAPI.getModels();
+    const workflows = await window.db.getWorkflows();
+    
+    dom.modelSelector.innerHTML = '';
+
+    const modelGroup = document.createElement('optgroup');
+    modelGroup.label = 'Models';
+    models.forEach((model, index) => {
+        const option = document.createElement('option');
+        option.value = `model_${index}`;
+        option.textContent = model.nickname;
+        modelGroup.appendChild(option);
+    });
+
+    const workflowGroup = document.createElement('optgroup');
+    workflowGroup.label = 'Workflows';
+    workflows.forEach(workflow => {
+        const option = document.createElement('option');
+        option.value = `workflow_${workflow.id}`;
+        option.textContent = workflow.name;
+        workflowGroup.appendChild(option);
+    });
+
+    dom.modelSelector.appendChild(modelGroup);
+    dom.modelSelector.appendChild(workflowGroup);
+
+    // Set selected
+    if (chatAPI.currentWorkflowId) {
+        dom.modelSelector.value = `workflow_${chatAPI.currentWorkflowId}`;
+    } else {
+        dom.modelSelector.value = `model_${chatAPI.currentModelIndex}`;
+    }
+}
+
+export function updateStatusMessage(tempId, text) {
+    const messageElement = dom.chatContainer.querySelector(`[data-id="${tempId}"]`);
+    if (messageElement) {
+        const contentElement = messageElement.querySelector('.message-content');
+        if (contentElement) {
+            contentElement.textContent = text;
+        }
+    }
+}

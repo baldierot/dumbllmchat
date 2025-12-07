@@ -1,6 +1,6 @@
 import { dom } from './dom.js';
 import { initializeEventListeners } from './events.js';
-import { renderAttachedFiles, updateTokenCountDisplay } from './ui.js';
+import { renderAttachedFiles, updateTokenCountDisplay, populateModelSelector } from './ui.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     const app = {
@@ -17,15 +17,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeEventListeners(app);
 
     await app.chatAPI.init();
+    
     const currentModel = app.chatAPI.getCurrentModel();
-    if (currentModel) {
-        dom.modelNickname.textContent = currentModel.nickname;
-    } else {
-        dom.modelNickname.textContent = 'No Model';
+    if (!currentModel) {
         dom.sendBtn.disabled = true;
     }
+
+    await populateModelSelector(app.chatAPI);
+    
     const messages = await app.chatAPI.getMessages();
     app.chatView.renderMessages(messages);
-    updateTokenCountDisplay(app.chatAPI);
+    
+    if (app.chatAPI.currentWorkflowId) {
+        dom.tokenCountDisplay.textContent = 'Workflow';
+    } else {
+        updateTokenCountDisplay(app.chatAPI);
+    }
+    
     renderAttachedFiles(app);
 });

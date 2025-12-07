@@ -7,6 +7,7 @@ class ChatAPI {
         this.conversations = [];
         this.currentConversationId = null;
         this.currentModelIndex = this.getCurrentModelIndex();
+        this.currentWorkflowId = null; // Added
         this.apiKeys = [];
         this.proxy = '';
         this.invalidKeys = new Map();
@@ -21,6 +22,11 @@ class ChatAPI {
         await this.fetchAndSetModels();
         this.conversations = await window.db.getConversations();
         this.currentConversationId = this.getCurrentConversationId();
+        
+        // Load workflow or model selection
+        this.currentWorkflowId = localStorage.getItem('current_workflow_id');
+        this.currentModelIndex = this.getCurrentModelIndex();
+
         if (!this.currentConversationId && this.conversations.length > 0) {
             this.currentConversationId = this.conversations[0].id;
             this.saveCurrentConversationId();
@@ -200,19 +206,22 @@ class ChatAPI {
         return this.models[this.currentModelIndex];
     }
 
-    cycleModel() {
-        this.currentModelIndex = (this.currentModelIndex + 1) % this.models.length;
-        this.saveCurrentModelIndex();
-        return this.getCurrentModel();
+    setCurrentWorkflow(id) {
+        this.currentWorkflowId = id;
+        localStorage.setItem('current_workflow_id', id);
+        localStorage.removeItem('current_model_index'); // Unset model
+    }
+
+    setCurrentModelIndex(index) {
+        this.currentModelIndex = index;
+        this.currentWorkflowId = null;
+        localStorage.setItem('current_model_index', index);
+        localStorage.removeItem('current_workflow_id'); // Unset workflow
     }
 
     getCurrentModelIndex() {
         const index = localStorage.getItem('current_model_index');
         return index ? parseInt(index, 10) : 0;
-    }
-
-    saveCurrentModelIndex() {
-        localStorage.setItem('current_model_index', this.currentModelIndex);
     }
 
     async getMessages() {
@@ -321,16 +330,14 @@ class ChatAPI {
         }
     }
 
-    async _generateContent(messages, signal) {
-        const currentModel = this.getCurrentModel();
-        const { modelName, temperature, system_prompt, useGoogleSearch, useUrlContext, maxOutputTokens, prependSystemPrompt, thinkingBudget } = currentModel;
+    async _makeApiRequest(modelConfig, messages, tools = [], signal) {
+        const { modelName, temperature, system_prompt, maxOutputTokens, prependSystemPrompt, thinkingBudget } = modelConfig;
 
         const apiKey = this.getApiKey();
         if (!apiKey) {
             throw new Error('No valid API key available.');
         }
 
-        let requestBody;
         const normalizedProxy = normalizeProxyUrl(this.proxy);
         const fetchEndpoint = `${normalizedProxy}https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
@@ -359,7 +366,7 @@ class ChatAPI {
             }
         }
 
-        requestBody = {
+        const requestBody = {
             contents: googleMessages,
             generationConfig: {
                 temperature,
@@ -369,43 +376,24 @@ class ChatAPI {
                 stopSequences: []
             },
             safetySettings: [
-                {
-                    category: 'HARM_CATEGORY_HARASSMENT',
-                    threshold: 'BLOCK_NONE'
-                },
-                {
-                    category: 'HARM_CATEGORY_HATE_SPEECH',
-                    threshold: 'BLOCK_NONE'
-                },
-                {
-                    category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-                    threshold: 'BLOCK_NONE'
-                },
-                {
-                    category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-                    threshold: 'BLOCK_NONE'
-                }
+                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
             ]
         };
 
-        if (!prependSystemPrompt) {
+        if (!prependSystemPrompt && system_prompt) {
             requestBody.systemInstruction = {
-                role: 'user',
+                role: 'user', // System instructions are weirdly role 'user' for Gemini
                 parts: [{ text: system_prompt }]
             };
         }
 
-        const tools = [];
-        if (useGoogleSearch) {
-            tools.push({ "google_search": {} });
-        }
-        if (useUrlContext) {
-            tools.push({ "url_context": {} });
-        }
         if (tools.length > 0) {
             requestBody.tools = tools;
         }
-
+        
         if (thinkingBudget) {
             requestBody.generationConfig.thinkingConfig = {
                 thinkingBudget: thinkingBudget
@@ -433,6 +421,10 @@ class ChatAPI {
 
             const data = await response.json();
             if (!data.candidates || data.candidates.length === 0) {
+                const stopReason = data.promptFeedback?.blockReason;
+                if (stopReason) {
+                    return `[The model blocked the response. Reason: ${stopReason}]`;
+                }
                 return '[The model sent an empty response.]';
             }
             const content = data.candidates[0].content;
@@ -448,6 +440,35 @@ class ChatAPI {
             }
             throw error;
         }
+    }
+
+    async generateFromModel(modelNickname, messages, flags = [], signal) {
+        const modelConfig = this.models.find(m => m.nickname.toLowerCase() === modelNickname.toLowerCase());
+        if (!modelConfig) {
+            throw new Error(`Model with nickname "${modelNickname}" not found.`);
+        }
+
+        const tools = [];
+        if (flags.includes('google')) {
+            tools.push({ "google_search": {} });
+        }
+        if (flags.includes('urlcontext')) {
+            tools.push({ "url_context": {} });
+        }
+
+        return this._makeApiRequest(modelConfig, messages, tools, signal);
+    }
+    
+    async _generateContent(messages, signal) {
+        const currentModel = this.getCurrentModel();
+        const tools = [];
+        if (currentModel.useGoogleSearch) {
+            tools.push({ "google_search": {} });
+        }
+        if (currentModel.useUrlContext) {
+            tools.push({ "url_context": {} });
+        }
+        return this._makeApiRequest(currentModel, messages, tools, signal);
     }
 
     async sendMessage(messages) {

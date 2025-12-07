@@ -1,6 +1,5 @@
 export const dom = {
-    cycleModelBtn: document.getElementById('cycle-model-btn'),
-    modelNickname: document.getElementById('model-nickname'),
+    modelSelector: document.getElementById('model-selector'),
     tokenCountDisplay: document.getElementById('token-count-display'),
     settingsBtn: document.getElementById('settings-btn'),
     historyBtn: document.getElementById('history-btn'),
@@ -34,4 +33,21 @@ export const dom = {
     addApiKeyBtn: document.getElementById('add-api-key-btn'),
     proxyUrl: document.getElementById('proxy-url'),
     apiKeysContainer: document.getElementById('api-keys-container'),
+
+    // Settings Tabs
+    settingsTabs: document.getElementById('settings-tabs'),
+    tabGlobal: document.getElementById('tab-global'),
+    tabModels: document.getElementById('tab-models'),
+    tabWorkflows: document.getElementById('tab-workflows'),
+    
+    // Workflows
+    workflowsList: document.getElementById('workflows-list'),
+    addWorkflowBtn: document.getElementById('add-workflow-btn'),
+    
+    // Workflow Editor
+    workflowEditorOverlay: document.getElementById('workflow-editor-overlay'),
+    workflowNameInput: document.getElementById('workflow-name-input'),
+    workflowScriptInput: document.getElementById('workflow-script-input'),
+    workflowEditorSaveBtn: document.getElementById('workflow-editor-save-btn'),
+    workflowEditorCancelBtn: document.getElementById('workflow-editor-cancel-btn'),
 };

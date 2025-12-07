@@ -15,9 +15,8 @@
 
     <header class="bg-white dark:bg-gray-800 shadow-md z-10">
         <div class="container mx-auto px-2 py-2 flex justify-between items-center">
-            <button id="cycle-model-btn" class="text-2xl">🔁</button>
-                        <div class="flex items-baseline">
-                <h1 id="model-nickname" class="text-lg font-semibold">Gemini Pro</h1>
+            <div class="flex-grow">
+                <select id="model-selector" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500 max-w-xs truncate"></select>
             </div>
             <div>
                 <button id="clear-chat-btn" class="text-2xl mr-2">🗑️</button>
@@ -56,31 +55,51 @@
     <div id="settings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20 p-2">
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-2 w-full h-full relative flex flex-col">
             <h2 class="text-2xl font-bold mb-4">Settings</h2>
+            
+            <!-- Tab Navigation -->
+            <div id="settings-tabs" class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+                <button data-tab="global" class="py-2 px-4 font-semibold border-b-2 border-blue-500 text-blue-500">Global</button>
+                <button data-tab="models" class="py-2 px-4 font-semibold text-gray-500">Models</button>
+                <button data-tab="workflows" class="py-2 px-4 font-semibold text-gray-500">Workflows</button>
+            </div>
+
             <div class="flex-grow overflow-y-auto">
-                <form id="settings-form" class="flex flex-col h-full">
-                    <div class="flex-grow overflow-y-auto">
-                        <div id="global-settings-container" class="mb-4 p-2 border rounded-lg dark:border-gray-600">
-                            <h3 class="text-lg font-semibold mb-2">Global Settings</h3>
-                            <div class="space-y-2">
-                                <div>
-                                    <label for="proxy-url" class="block text-sm font-medium">Proxy URL</label>
-                                    <input type="text" id="proxy-url" placeholder="Proxy URL" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                <!-- Global Tab -->
+                <div id="tab-global" class="p-2">
+                    <div id="global-settings-container" class="mb-4 p-2 border rounded-lg dark:border-gray-600">
+                        <h3 class="text-lg font-semibold mb-2">Global Settings</h3>
+                        <div class="space-y-2">
+                            <div>
+                                <label for="proxy-url" class="block text-sm font-medium">Proxy URL</label>
+                                <input type="text" id="proxy-url" placeholder="Proxy URL" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium">API Keys</label>
+                                <div id="api-keys-container" class="space-y-2">
+                                    <!-- API Key inputs will be added here -->
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-medium">API Keys</label>
-                                    <div id="api-keys-container" class="space-y-2">
-                                        <!-- API Key inputs will be added here -->
-                                    </div>
-                                    <button type="button" id="add-api-key-btn" class="mt-2 text-sm p-2 bg-blue-500 text-white rounded-lg">Add API Key</button>
-                                </div>
+                                <button type="button" id="add-api-key-btn" class="mt-2 text-sm p-2 bg-blue-500 text-white rounded-lg">Add API Key</button>
                             </div>
                         </div>
-                        <div id="llm-configs-container"></div>
                     </div>
-                </form>
+                </div>
+
+                <!-- Models Tab -->
+                <div id="tab-models" class="hidden p-2">
+                    <div id="llm-configs-container"></div>
+                    <button type="button" id="add-model-btn" class="mt-4 text-2xl">➕ Add Model</button>
+                </div>
+
+                <!-- Workflows Tab -->
+                <div id="tab-workflows" class="hidden p-2">
+                    <div id="workflows-list" class="space-y-2">
+                        <!-- Workflow items will be rendered here -->
+                    </div>
+                    <button type="button" id="add-workflow-btn" class="mt-4 text-2xl">➕ Add Workflow</button>
+                </div>
             </div>
+
             <div class="flex justify-between mt-4">
-                <button type="button" id="add-model-btn" class="text-2xl">➕</button>
                 <div>
                     <button type="button" id="import-settings-btn" class="text-2xl mr-2">📥</button>
                     <button type="button" id="export-settings-btn" class="text-2xl">📤</button>
@@ -110,6 +129,22 @@
             <button id="close-history-btn" class="absolute top-2 right-2 text-2xl">❌</button>
         </div>
     </div>
+
+    <!-- Workflow Editor Overlay -->
+    <div id="workflow-editor-overlay" class="hidden fixed inset-0 bg-white dark:bg-gray-900 z-50 flex flex-col p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold">Edit Workflow</h2>
+        </div>
+        <div class="flex flex-col flex-grow">
+            <input type="text" id="workflow-name-input" placeholder="Workflow Name" class="w-full p-2 mb-4 border rounded-lg dark:bg-gray-800 dark:border-gray-700">
+            <textarea id="workflow-script-input" class="flex-grow font-mono p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 w-full h-full resize-none whitespace-pre overflow-x-auto" placeholder="#id model +flag: prompt..."></textarea>
+        </div>
+        <div class="flex justify-end mt-4">
+            <button id="workflow-editor-cancel-btn" class="mr-4 py-2 px-4 bg-gray-500 text-white rounded-lg">Cancel</button>
+            <button id="workflow-editor-save-btn" class="py-2 px-4 bg-blue-500 text-white rounded-lg">Save</button>
+        </div>
+    </div>
+
 
         <script src="js/db.js" type="module"></script>
         <script src="js/api.js" type="module"></script>

@@ -1,5 +1,6 @@
 import { dom } from './dom.js';
-import { showMessageControls, removeMessageControls, renderConversations, updateTokenCountDisplay, renderLlmConfigs, renderGlobalSettings, addApiKeyInput, renderAttachedFiles } from './ui.js';
+import { showMessageControls, removeMessageControls, renderConversations, updateTokenCountDisplay, renderLlmConfigs, renderGlobalSettings, addApiKeyInput, renderAttachedFiles, switchSettingsTab, renderWorkflowsList, openWorkflowEditor, populateModelSelector, updateStatusMessage } from './ui.js';
+import { WorkflowEngine } from './workflow-engine.js';
 
 export function initializeEventListeners(app) {
     dom.chatContainer.addEventListener('message-selected', (e) => {
@@ -186,16 +187,35 @@ export function initializeEventListeners(app) {
         input.click();
     });
 
-    dom.cycleModelBtn.addEventListener('click', () => {
-        const newModel = app.chatAPI.cycleModel();
-        dom.modelNickname.textContent = newModel.nickname;
-        updateTokenCountDisplay(app.chatAPI);
+    dom.modelSelector.addEventListener('change', (e) => {
+        const value = e.target.value;
+        if (value.startsWith('model_')) {
+            const index = parseInt(value.split('_')[1]);
+            app.chatAPI.setCurrentModelIndex(index);
+            updateTokenCountDisplay(app.chatAPI);
+        } else if (value.startsWith('workflow_')) {
+            const id = value.substring('workflow_'.length);
+            app.chatAPI.setCurrentWorkflow(id);
+            dom.tokenCountDisplay.textContent = 'Workflow';
+        }
     });
 
-    dom.settingsBtn.addEventListener('click', () => {
+    dom.settingsBtn.addEventListener('click', async () => {
+        // Render settings
         renderGlobalSettings(app.chatAPI);
         renderLlmConfigs(app.chatAPI);
+        await renderWorkflowsList(app);
+        
+        // UI State
+        switchSettingsTab('global');
         dom.settingsModal.classList.remove('hidden');
+    });
+
+    dom.settingsTabs.addEventListener('click', (e) => {
+        const tab = e.target.closest('button');
+        if (tab && tab.dataset.tab) {
+            switchSettingsTab(tab.dataset.tab);
+        }
     });
 
     dom.closeSettingsBtn.addEventListener('click', () => {
@@ -238,10 +258,47 @@ export function initializeEventListeners(app) {
             };
         });
         await app.chatAPI.saveModels(newModels);
+        await populateModelSelector(app.chatAPI);
         dom.settingsModal.classList.add('hidden');
-        dom.modelNickname.textContent = app.chatAPI.getCurrentModel().nickname;
-        updateTokenCountDisplay(app.chatAPI);
+        if (app.chatAPI.currentWorkflowId) {
+            dom.tokenCountDisplay.textContent = 'Workflow';
+        } else {
+            updateTokenCountDisplay(app.chatAPI);
+        }
     });
+
+    // Workflow Editor Events
+    dom.addWorkflowBtn.addEventListener('click', () => {
+        openWorkflowEditor(app, null);
+    });
+
+    dom.workflowEditorCancelBtn.addEventListener('click', () => {
+        dom.workflowEditorOverlay.classList.add('hidden');
+    });
+
+    dom.workflowEditorSaveBtn.addEventListener('click', async () => {
+        const name = dom.workflowNameInput.value.trim();
+        const script = dom.workflowScriptInput.value.trim();
+
+        if (!name || !script) {
+            alert('Workflow Name and Script cannot be empty.');
+            return;
+        }
+        
+        const workflowData = { name, script };
+
+        if (app.editingWorkflowId) {
+            workflowData.id = app.editingWorkflowId;
+            await window.db.updateWorkflow(workflowData);
+        } else {
+            await window.db.addWorkflow(workflowData);
+        }
+
+        dom.workflowEditorOverlay.classList.add('hidden');
+        await renderWorkflowsList(app);
+        await populateModelSelector(app.chatAPI);
+    });
+
 
     dom.attachFileBtn.addEventListener('click', () => {
         const input = document.createElement('input');
@@ -264,42 +321,75 @@ export function initializeEventListeners(app) {
 
     dom.sendBtn.addEventListener('click', async () => {
         const content = dom.messageInput.value.trim();
-        if (content || app.attachedFiles.length > 0) {
-            if (app.editingMessageId !== null) {
-                const updatedMessage = await app.chatAPI.updateMessage(app.editingMessageId, content, app.attachedFiles);
-                app.chatView.editMessage(updatedMessage);
-                app.editingMessageId = null;
-                dom.cancelEditBtn.classList.add('hidden');
-                dom.sendBtn.textContent = '▶️';
-                dom.messageInput.value = '';
-                app.attachedFiles = [];
-                renderAttachedFiles(app);
-            } else {
-                const userMessage = { sender: 'User', content, files: app.attachedFiles };
-                const newUserMessage = await app.chatAPI.addMessage(userMessage);
-                app.chatView.appendMessage(newUserMessage);
-                dom.messageInput.value = '';
-                app.attachedFiles = [];
-                renderAttachedFiles(app);
+        if (!content && app.attachedFiles.length === 0) return;
 
-                dom.sendBtn.disabled = true;
-                const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
-                app.chatView.appendMessage(pendingMessage);
+        // --- Standard Message Sending ---
+        if (app.editingMessageId !== null) {
+            const updatedMessage = await app.chatAPI.updateMessage(app.editingMessageId, content, app.attachedFiles);
+            app.chatView.editMessage(updatedMessage);
+            app.editingMessageId = null;
+            dom.cancelEditBtn.classList.add('hidden');
+            dom.sendBtn.textContent = '▶️';
+            dom.messageInput.value = '';
+            app.attachedFiles = [];
+            renderAttachedFiles(app);
+            return;
+        }
 
-                try {
-                    const response = await app.chatAPI.sendMessage(await app.chatAPI.getMessages());
-                    app.chatView.removeMessage(-1);
-                    if (response) {
-                        app.chatView.appendMessage(response);
-                    }
-                } catch (error) {
-                    app.chatView.removeMessage(-1);
-                    const errorMessage = { sender: 'Error', content: `An error occurred: ${error.message}`, id: Date.now() };
-                    app.chatView.appendMessage(errorMessage);
-                } finally {
-                    dom.sendBtn.disabled = false;
-                    updateTokenCountDisplay(app.chatAPI);
+        const userMessage = { sender: 'User', content, files: app.attachedFiles };
+        const newUserMessage = await app.chatAPI.addMessage(userMessage);
+        app.chatView.appendMessage(newUserMessage);
+        dom.messageInput.value = '';
+        app.attachedFiles = [];
+        renderAttachedFiles(app);
+        dom.sendBtn.disabled = true;
+
+        // --- Check for Workflow vs. Model ---
+        if (app.chatAPI.currentWorkflowId) {
+            // WORKFLOW MODE
+            const tempId = 'temp-' + Date.now();
+            app.chatView.appendMessage({ sender: 'Assistant', content: 'Starting workflow...', id: tempId }, true); // isTemp=true
+
+            try {
+                const workflows = await window.db.getWorkflows();
+                const wf = workflows.find(w => w.id === app.chatAPI.currentWorkflowId);
+                if (!wf) throw new Error('Selected workflow not found.');
+
+                const engine = new WorkflowEngine(app.chatAPI);
+                const callback = (status) => updateStatusMessage(tempId, status);
+                
+                const result = await engine.execute(wf.script, content, callback);
+                
+                app.chatView.removeMessage(tempId);
+                const assistantMsg = await app.chatAPI.addMessage({ sender: 'Assistant', content: result });
+                app.chatView.appendMessage(assistantMsg);
+
+            } catch (err) {
+                app.chatView.removeMessage(tempId);
+                const errorMsg = { sender: 'Error', content: err.message, id: Date.now() };
+                app.chatView.appendMessage(errorMsg); // Don't save error to DB
+            } finally {
+                dom.sendBtn.disabled = false;
+            }
+
+        } else {
+            // MODEL MODE (Original logic)
+            const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
+            app.chatView.appendMessage(pendingMessage);
+
+            try {
+                const response = await app.chatAPI.sendMessage(await app.chatAPI.getMessages());
+                app.chatView.removeMessage(-1);
+                if (response) {
+                    app.chatView.appendMessage(response);
                 }
+            } catch (error) {
+                app.chatView.removeMessage(-1);
+                const errorMessage = { sender: 'Error', content: `An error occurred: ${error.message}`, id: Date.now() };
+                app.chatView.appendMessage(errorMessage);
+            } finally {
+                dom.sendBtn.disabled = false;
+                updateTokenCountDisplay(app.chatAPI);
             }
         }
     });
@@ -385,16 +475,16 @@ export function initializeEventListeners(app) {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
-        input.onchange = e => {
+        input.onchange = async e => {
             const file = e.target.files[0];
             const reader = new FileReader();
-            reader.onload = readerEvent => {
+            reader.onload = async readerEvent => {
                 try {
                     const content = readerEvent.target.result;
                     const newModels = JSON.parse(content);
-                    app.chatAPI.saveModels(newModels);
-                    renderLlmConfigs(app.chatAPI);
-                    dom.modelNickname.textContent = app.chatAPI.getCurrentModel().nickname;
+                    await app.chatAPI.saveModels(newModels);
+                    await renderLlmConfigs(app.chatAPI);
+                    await populateModelSelector(app.chatAPI);
                     alert('Settings imported successfully!');
                 } catch (error) {
                     alert('Error importing settings: ' + error.message);
