@@ -6,6 +6,7 @@ Workflows allow you to chain multiple models, tools, and custom logic together i
 
 Each line in a workflow script represents one step, called a **Node**. The structure of these nodes and their indentation defines the entire workflow.
 
+-   **Comments:** Any line starting with `//` is ignored by the parser.
 -   **Indentation (2 spaces):** Defines parent-child relationships. A parent node only runs after all its indented child nodes have finished.
 -   **Execution Order:** Nodes with the same indentation level run in parallel, unless one explicitly depends on another.
 
