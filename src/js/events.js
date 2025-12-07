@@ -201,12 +201,10 @@ export function initializeEventListeners(app) {
     });
 
     dom.settingsBtn.addEventListener('click', async () => {
-        // Render settings
         renderGlobalSettings(app.chatAPI);
         renderLlmConfigs(app.chatAPI);
         await renderWorkflowsList(app);
         
-        // UI State
         switchSettingsTab('global');
         dom.settingsModal.classList.remove('hidden');
     });
@@ -290,7 +288,6 @@ export function initializeEventListeners(app) {
         }
     });
 
-    // Workflow Editor Events
     dom.addWorkflowBtn.addEventListener('click', () => {
         openWorkflowEditor(app, null);
     });
@@ -346,7 +343,6 @@ export function initializeEventListeners(app) {
         const content = dom.messageInput.value.trim();
         if (!content && app.attachedFiles.length === 0) return;
 
-        // --- Standard Message Sending ---
         if (app.editingMessageId !== null) {
             const updatedMessage = await app.chatAPI.updateMessage(app.editingMessageId, content, app.attachedFiles);
             app.chatView.editMessage(updatedMessage);
@@ -367,11 +363,9 @@ export function initializeEventListeners(app) {
         renderAttachedFiles(app);
         dom.sendBtn.disabled = true;
 
-        // --- Check for Workflow vs. Model ---
         if (app.chatAPI.currentWorkflowId) {
-            // WORKFLOW MODE
             const tempId = 'temp-' + Date.now();
-            app.chatView.appendMessage({ sender: 'Assistant', content: 'Starting workflow...', id: tempId }, true); // isTemp=true
+            app.chatView.appendMessage({ sender: 'Assistant', content: 'Starting workflow...', id: tempId }, true); 
 
             try {
                 const workflows = await window.db.getWorkflows();
@@ -390,13 +384,12 @@ export function initializeEventListeners(app) {
             } catch (err) {
                 app.chatView.removeMessage(tempId);
                 const errorMsg = { sender: 'Error', content: err.message, id: Date.now() };
-                app.chatView.appendMessage(errorMsg); // Don't save error to DB
+                app.chatView.appendMessage(errorMsg);
             } finally {
                 dom.sendBtn.disabled = false;
             }
 
         } else {
-            // MODEL MODE (Original logic)
             const pendingMessage = { sender: 'Assistant', content: '...', id: -1 };
             app.chatView.appendMessage(pendingMessage);
 
@@ -483,9 +476,11 @@ export function initializeEventListeners(app) {
         }
     });
 
-    dom.exportSettingsBtn.addEventListener('click', () => {
+    dom.exportSettingsBtn.addEventListener('click', async () => {
         const models = app.chatAPI.getModels();
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(models, null, 2));
+        const workflows = await window.db.getWorkflows();
+        const settings = { models, workflows };
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings, null, 2));
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href",     dataStr);
         downloadAnchorNode.setAttribute("download", "gemini-chat-settings.json");
@@ -504,10 +499,31 @@ export function initializeEventListeners(app) {
             reader.onload = async readerEvent => {
                 try {
                     const content = readerEvent.target.result;
-                    const newModels = JSON.parse(content);
-                    await app.chatAPI.saveModels(newModels);
+                    const settings = JSON.parse(content);
+
+                    // Handle both new {models, workflows} format and old [models] format
+                    let modelsToImport = [];
+                    if (Array.isArray(settings)) {
+                        // Old format
+                        modelsToImport = settings;
+                    } else if (settings.models) {
+                        // New format
+                        modelsToImport = settings.models;
+                    }
+
+                    if (modelsToImport.length > 0) {
+                        await app.chatAPI.saveModels(modelsToImport);
+                    }
+                    
+                    if (settings.workflows) {
+                        for (const workflow of settings.workflows) {
+                            await window.db.updateWorkflow(workflow);
+                        }
+                    }
+
                     await renderLlmConfigs(app.chatAPI);
                     await populateModelSelector(app.chatAPI);
+                    await renderWorkflowsList(app); // Re-render workflows list
                     alert('Settings imported successfully!');
                 } catch (error) {
                     alert('Error importing settings: ' + error.message);
