@@ -1,3 +1,23 @@
+import { WorkflowParser } from './workflow-parser.js';
+
+const NodeStatus = {
+    PENDING: 'PENDING',
+    RUNNING: 'RUNNING',
+    COMPLETED: 'COMPLETED',
+    FAILED: 'FAILED'
+};
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export class WorkflowEngine {
+    constructor(chatAPI) {
+        this.chatAPI = chatAPI;
+        this.parser = new WorkflowParser();
+    }
+
+    async execute(workflowScript, userInput, progressCallback = () => {}) {
         const nodes = this.parser.parse(workflowScript);
         if (!nodes || nodes.length === 0) {
             return "";
@@ -14,7 +34,6 @@
                 const resolvedModel = staticVars.get(n.modelVariable);
                 if (resolvedModel) {
                     requiredModels.add(resolvedModel.toLowerCase());
-                } else {
                 }
             }
         });
@@ -63,7 +82,6 @@
             }
             lastRunnableCount = runnableNodes.length;
 
-
             const runnableLlmNodes = runnableNodes.filter(node => node.type === 'llm');
             const runnableStaticNodes = runnableNodes.filter(node => node.type === 'static');
 
@@ -74,7 +92,7 @@
                     let content = node.prompt.replace(/\{\{INPUT\}\}/g, userInput);
                     if (node.explicitDependencies) {
                         node.explicitDependencies.forEach(depId => {
-                            const regex = new RegExp(`\\{\\{#${depId}\\}\\}`, 'g');
+                            const regex = new RegExp(`\\{\\{#${depId}\\\}\}`, 'g');
                             content = content.replace(regex, outputs.get(depId) || '');
                         });
                     }
@@ -115,7 +133,7 @@
 
                         if (node.explicitDependencies) {
                             node.explicitDependencies.forEach(depId => {
-                                const regex = new RegExp(`\\{\\{#${depId}\\}\\}`, 'g');
+                                const regex = new RegExp(`\\{\\{#${depId}\\\}\}`, 'g');
                                 prompt = prompt.replace(regex, outputs.get(depId));
                                 promptDeps.add(depId);
                             });
@@ -175,7 +193,7 @@
 
                         if (node.explicitDependencies) {
                             node.explicitDependencies.forEach(depId => {
-                                const regex = new RegExp(`\\{\\{#${depId}\\}\\}`, 'g');
+                                const regex = new RegExp(`\\{\\{#${depId}\\\}\}`, 'g');
                                 prompt = prompt.replace(regex, outputs.get(depId));
                                 promptDeps.add(depId);
                             });
