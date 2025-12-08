@@ -1,5 +1,5 @@
 import { dom } from './dom.js';
-import { showMessageControls, removeMessageControls, renderConversations, updateTokenCountDisplay, renderLlmConfigs, renderGlobalSettings, addApiKeyInput, renderAttachedFiles, switchSettingsTab, renderWorkflowsList, openWorkflowEditor, populateModelSelector, updateStatusMessage } from './ui.js';
+import { showMessageControls, removeMessageControls, renderConversations, updateTokenCountDisplay, renderLlmConfigs, renderGlobalSettings, renderAttachedFiles, switchSettingsTab, renderWorkflowsList, openWorkflowEditor, populateModelSelector, updateStatusMessage, renderApiKeyGroups } from './ui.js';
 import { WorkflowEngine } from './workflow-engine.js';
 
 export function initializeEventListeners(app) {
@@ -238,23 +238,78 @@ export function initializeEventListeners(app) {
         renderLlmConfigs(app.chatAPI);
     });
 
-    dom.addApiKeyBtn.addEventListener('click', () => {
-        addApiKeyInput();
+    document.getElementById('add-api-key-group-btn').addEventListener('click', async () => {
+        await window.db.addApiKeyGroup({ name: 'New Key Group', keys: [] });
+        await renderApiKeyGroups();
     });
 
-    dom.saveSettingsBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
+    let keySaveTimer;
+    const _saveKeysFromGroupDiv = async (div) => {
+        if (!div) return;
+        const groupId = parseInt(div.dataset.groupId, 10);
+        const name = div.querySelector('.group-name-input').value;
+        const keys = Array.from(div.querySelectorAll('.api-key-input')).map(input => input.value.trim());
+        await window.db.updateApiKeyGroup({ id: groupId, name, keys });
+    };
 
-        const apiKeys = Array.from(document.querySelectorAll('.api-key-input')).map(input => input.value.trim()).filter(key => key);
+    dom.settingsModal.addEventListener('click', async (e) => {
+        const groupDiv = e.target.closest('[data-group-id]');
+
+        if (e.target.classList.contains('remove-api-key-group-btn')) {
+            const groupId = parseInt(groupDiv.dataset.groupId, 10);
+            if (confirm('Are you sure you want to delete this API key group?')) {
+                await window.db.deleteApiKeyGroup(groupId);
+                await renderApiKeyGroups();
+            }
+        }
+
+        if (e.target.classList.contains('add-api-key-to-group-btn')) {
+            const keyInput = document.createElement('div');
+            keyInput.className = 'flex items-center space-x-2';
+            keyInput.innerHTML = `
+                <input type="text" class="api-key-input w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
+                <button type="button" class="remove-api-key-btn text-xl">➖</button>
+            `;
+            groupDiv.querySelector('.api-keys-list').appendChild(keyInput);
+            keyInput.querySelector('input').focus();
+        }
+
+        if (e.target.classList.contains('remove-api-key-btn')) {
+            e.target.closest('.flex.items-center.space-x-2').remove();
+            await _saveKeysFromGroupDiv(groupDiv);
+        }
+    });
+
+    dom.settingsModal.addEventListener('input', async (e) => {
+        const groupDiv = e.target.closest('[data-group-id]');
+
+        if (e.target.classList.contains('group-name-input')) {
+            await _saveKeysFromGroupDiv(groupDiv);
+        }
+
+        if (e.target.classList.contains('api-key-input')) {
+            clearTimeout(keySaveTimer);
+            keySaveTimer = setTimeout(() => {
+                _saveKeysFromGroupDiv(groupDiv);
+            }, 500);
+        }
+    });
+
+    const _saveGlobalSettings = async (chatAPI) => {
         const proxy = dom.proxyUrl.value.trim();
         const workflowRequestDelay = parseFloat(dom.workflowRequestDelay.value);
         const sequentialWorkflowRequests = dom.sequentialWorkflowRequests.checked;
-        app.chatAPI.saveGlobalSettings({ apiKeys, proxy, workflowRequestDelay, sequentialWorkflowRequests });
+        const apiRetryDelay = parseInt(dom.apiRetryDelay.value, 10);
+        chatAPI.saveGlobalSettings({ proxy, workflowRequestDelay, sequentialWorkflowRequests, apiRetryDelay });
+    };
 
+    const _saveModels = async (chatAPI) => {
         const newModels = Array.from(dom.llmConfigsContainer.children).map(configDiv => {
             const type = configDiv.querySelector('.model-type-selector').value;
+            const apiKeyGroupId = configDiv.querySelector('.api-key-group-selector').value;
             const model = {
                 type: type,
+                apiKeyGroupId: apiKeyGroupId ? parseInt(apiKeyGroupId, 10) : null,
                 modelName: configDiv.querySelector('input[placeholder="Model Name"]').value,
                 nickname: configDiv.querySelector('input[placeholder="Nickname"]').value,
                 temperature: parseFloat(configDiv.querySelector('input[placeholder="Temperature"]').value),
@@ -269,8 +324,6 @@ export function initializeEventListeners(app) {
                 model.thinkingBudget = parseInt(configDiv.querySelector('input[placeholder="Thinking Budget (tokens)"]').value, 10);
             } else if (type === 'openai') {
                 model.endpoint = configDiv.querySelector('.openai-endpoint').value;
-                model.apiKey = configDiv.querySelector('.openai-api-key').value;
-
                 model.reasoningEffort = configDiv.querySelector('.openai-reasoning-effort').value.trim();
                 if (model.reasoningEffort === '') {
                     model.reasoningEffort = null;
@@ -278,47 +331,34 @@ export function initializeEventListeners(app) {
             }
             return model;
         });
-        await app.chatAPI.saveModels(newModels);
-        await populateModelSelector(app.chatAPI);
-        dom.settingsModal.classList.add('hidden');
-        if (app.chatAPI.currentWorkflowId) {
-            dom.tokenCountDisplay.textContent = 'Workflow';
-        } else {
-            updateTokenCountDisplay(app.chatAPI);
-        }
-    });
+        await chatAPI.saveModels(newModels);
+        await populateModelSelector(chatAPI);
+    };
 
-    dom.addWorkflowBtn.addEventListener('click', () => {
-        openWorkflowEditor(app, null);
+    dom.tabGlobal.addEventListener('change', () => _saveGlobalSettings(app.chatAPI));
+    dom.llmConfigsContainer.addEventListener('change', () => _saveModels(app.chatAPI));
+
+    dom.addWorkflowBtn.addEventListener('click', async () => {
+        const newWorkflowId = await window.db.addWorkflow({ name: 'New Workflow', script: '#\n' });
+        const newWorkflow = { id: newWorkflowId, name: 'New Workflow', script: '#\n' };
+        await renderWorkflowsList(app);
+        openWorkflowEditor(app, newWorkflow);
     });
 
     dom.workflowEditorCancelBtn.addEventListener('click', () => {
         dom.workflowEditorOverlay.classList.add('hidden');
     });
 
-    dom.workflowEditorSaveBtn.addEventListener('click', async () => {
-        const name = dom.workflowNameInput.value.trim();
-        const script = dom.workflowScriptInput.value.trim();
-
-        if (!name || !script) {
-            alert('Workflow Name and Script cannot be empty.');
-            return;
-        }
-        
-        const workflowData = { name, script };
-
+    dom.workflowEditorOverlay.addEventListener('input', async () => {
         if (app.editingWorkflowId) {
-            workflowData.id = app.editingWorkflowId;
+            const name = dom.workflowNameInput.value.trim();
+            const script = dom.workflowScriptInput.value;
+            const workflowData = { id: app.editingWorkflowId, name, script };
             await window.db.updateWorkflow(workflowData);
-        } else {
-            await window.db.addWorkflow(workflowData);
+            await renderWorkflowsList(app);
+            await populateModelSelector(app.chatAPI);
         }
-
-        dom.workflowEditorOverlay.classList.add('hidden');
-        await renderWorkflowsList(app);
-        await populateModelSelector(app.chatAPI);
     });
-
 
     dom.attachFileBtn.addEventListener('click', () => {
         const input = document.createElement('input');
@@ -479,7 +519,8 @@ export function initializeEventListeners(app) {
     dom.exportSettingsBtn.addEventListener('click', async () => {
         const models = app.chatAPI.getModels();
         const workflows = await window.db.getWorkflows();
-        const settings = { models, workflows };
+        const apiKeyGroups = await window.db.getApiKeyGroups();
+        const settings = { models, workflows, apiKeyGroups };
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings, null, 2));
         const downloadAnchorNode = document.createElement('a');
         downloadAnchorNode.setAttribute("href",     dataStr);
@@ -501,13 +542,25 @@ export function initializeEventListeners(app) {
                     const content = readerEvent.target.result;
                     const settings = JSON.parse(content);
 
-                    // Handle both new {models, workflows} format and old [models] format
+                    // Handle API Key Groups
+                    if (settings.apiKeyGroups) {
+                        // Clear existing groups first
+                        const existingGroups = await window.db.getApiKeyGroups();
+                        for (const group of existingGroups) {
+                            await window.db.deleteApiKeyGroup(group.id);
+                        }
+                        // Import new ones
+                        for (const group of settings.apiKeyGroups) {
+                            delete group.id; // Let DB assign new ID
+                            await window.db.addApiKeyGroup(group);
+                        }
+                    }
+
+                    // Handle Models (with backward compatibility)
                     let modelsToImport = [];
-                    if (Array.isArray(settings)) {
-                        // Old format
+                    if (Array.isArray(settings)) { // Old format
                         modelsToImport = settings;
-                    } else if (settings.models) {
-                        // New format
+                    } else if (settings.models) { // New format
                         modelsToImport = settings.models;
                     }
 
@@ -515,17 +568,28 @@ export function initializeEventListeners(app) {
                         await app.chatAPI.saveModels(modelsToImport);
                     }
                     
+                    // Handle Workflows
                     if (settings.workflows) {
+                        // Similar to groups, clear existing workflows
+                        const existingWorkflows = await window.db.getWorkflows();
+                        for (const wf of existingWorkflows) {
+                            await window.db.deleteWorkflow(wf.id);
+                        }
                         for (const workflow of settings.workflows) {
-                            await window.db.updateWorkflow(workflow);
+                            delete workflow.id; // let DB assign new ID
+                            await window.db.addWorkflow(workflow);
                         }
                     }
 
+                    // Refresh UI
                     await renderLlmConfigs(app.chatAPI);
                     await populateModelSelector(app.chatAPI);
-                    await renderWorkflowsList(app); // Re-render workflows list
+                    await renderWorkflowsList(app);
+                    await renderApiKeyGroups();
                     alert('Settings imported successfully!');
+
                 } catch (error) {
+                    console.error('Error importing settings:', error);
                     alert('Error importing settings: ' + error.message);
                 }
             }

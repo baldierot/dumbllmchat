@@ -1,8 +1,9 @@
 const DB_NAME = 'dumbllmchat_db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const MESSAGES_STORE_NAME = 'messages';
 const CONVERSATIONS_STORE_NAME = 'conversations';
 const WORKFLOWS_STORE_NAME = 'workflows';
+const API_KEY_GROUPS_STORE_NAME = 'apiKeyGroups';
 
 let db;
 
@@ -39,6 +40,9 @@ function openDB() {
             }
             if (!db.objectStoreNames.contains(WORKFLOWS_STORE_NAME)) {
                 db.createObjectStore(WORKFLOWS_STORE_NAME, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(API_KEY_GROUPS_STORE_NAME)) {
+                db.createObjectStore(API_KEY_GROUPS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
             }
         };
     });
@@ -268,30 +272,270 @@ async function updateWorkflow(workflow) {
     });
 }
 
+
+
 async function deleteWorkflow(id) {
+
     const db = await openDB();
+
     return new Promise((resolve, reject) => {
+
         const transaction = db.transaction([WORKFLOWS_STORE_NAME], 'readwrite');
+
         const store = transaction.objectStore(WORKFLOWS_STORE_NAME);
+
         const request = store.delete(id);
+
         request.onerror = event => reject(`Error deleting workflow: ${event.target.error}`);
+
         request.onsuccess = () => resolve();
+
     });
+
 }
 
+
+
+async function getApiKeyGroups() {
+
+    const db = await openDB();
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction([API_KEY_GROUPS_STORE_NAME], 'readonly');
+
+        const store = transaction.objectStore(API_KEY_GROUPS_STORE_NAME);
+
+        const request = store.getAll();
+
+        request.onerror = event => reject(`Error getting API key groups: ${event.target.error}`);
+
+        request.onsuccess = event => resolve(event.target.result);
+
+    });
+
+}
+
+
+
+async function addApiKeyGroup(group) {
+
+    const db = await openDB();
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction([API_KEY_GROUPS_STORE_NAME], 'readwrite');
+
+        const store = transaction.objectStore(API_KEY_GROUPS_STORE_NAME);
+
+        const request = store.add(group);
+
+        request.onerror = event => reject(`Error adding API key group: ${event.target.error}`);
+
+        request.onsuccess = event => resolve(event.target.result);
+
+    });
+
+}
+
+
+
+async function updateApiKeyGroup(group) {
+
+    const db = await openDB();
+
+    return new Promise((resolve, reject) => {
+
+        const transaction = db.transaction([API_KEY_GROUPS_STORE_NAME], 'readwrite');
+
+        const store = transaction.objectStore(API_KEY_GROUPS_STORE_NAME);
+
+        const request = store.put(group);
+
+        request.onerror = event => reject(`Error updating API key group: ${event.target.error}`);
+
+        request.onsuccess = event => resolve(event.target.result);
+
+    });
+
+}
+
+
+
+
+
+
+
+async function deleteApiKeyGroup(id) {
+
+
+
+    const db = await openDB();
+
+
+
+    return new Promise((resolve, reject) => {
+
+
+
+        const transaction = db.transaction([API_KEY_GROUPS_STORE_NAME], 'readwrite');
+
+
+
+        const store = transaction.objectStore(API_KEY_GROUPS_STORE_NAME);
+
+
+
+        const request = store.delete(id);
+
+
+
+        request.onerror = event => reject(`Error deleting API key group: ${event.target.error}`);
+
+
+
+        request.onsuccess = () => resolve();
+
+
+
+    });
+
+
+
+}
+
+
+
+
+
+
+
+async function getApiKeyGroup(id) {
+
+
+
+    const db = await openDB();
+
+
+
+    return new Promise((resolve, reject) => {
+
+
+
+        const transaction = db.transaction([API_KEY_GROUPS_STORE_NAME], 'readonly');
+
+
+
+        const store = transaction.objectStore(API_KEY_GROUPS_STORE_NAME);
+
+
+
+        const request = store.get(id);
+
+
+
+        request.onerror = event => reject(`Error getting API key group: ${event.target.error}`);
+
+
+
+        request.onsuccess = event => resolve(event.target.result);
+
+
+
+    });
+
+
+
+}
+
+
+
+
+
+
+
 window.db = {
+
+
+
     getConversations,
+
+
+
     addConversation,
+
+
+
     updateConversation,
+
+
+
     deleteConversation,
+
+
+
     getMessages,
+
+
+
     addMessage,
+
+
+
     updateMessage,
+
+
+
     removeMessage,
+
+
+
     clearMessages,
+
+
+
     importConversation,
+
+
+
     getWorkflows,
+
+
+
     addWorkflow,
+
+
+
     updateWorkflow,
-    deleteWorkflow
+
+
+
+    deleteWorkflow,
+
+
+
+    getApiKeyGroups,
+
+
+
+    addApiKeyGroup,
+
+
+
+    updateApiKeyGroup,
+
+
+
+    deleteApiKeyGroup,
+
+
+
+    getApiKeyGroup
+
+
+
 };
+
+
+
+

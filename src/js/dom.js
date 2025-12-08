@@ -10,7 +10,6 @@ export const dom = {
     settingsModal: document.getElementById('settings-modal'),
     llmConfigsContainer: document.getElementById('llm-configs-container'),
     addModelBtn: document.getElementById('add-model-btn'),
-    saveSettingsBtn: document.getElementById('save-settings-btn'),
     closeSettingsBtn: document.getElementById('close-settings-btn'),
     historyModal: document.getElementById('history-modal'),
     conversationsContainer: document.getElementById('conversations-container'),
@@ -30,26 +29,21 @@ export const dom = {
     attachFileBtn: document.getElementById('attach-file-btn'),
     attachedFilesContainer: document.getElementById('attached-files-container'),
     cancelEditBtn: document.getElementById('cancel-edit-btn'),
-    addApiKeyBtn: document.getElementById('add-api-key-btn'),
     proxyUrl: document.getElementById('proxy-url'),
-    apiKeysContainer: document.getElementById('api-keys-container'),
     sequentialWorkflowRequests: document.getElementById('sequential-workflow-requests'),
     workflowRequestDelay: document.getElementById('workflow-request-delay'),
+    apiRetryDelay: document.getElementById('api-retry-delay'),
 
-    // Settings Tabs
     settingsTabs: document.getElementById('settings-tabs'),
     tabGlobal: document.getElementById('tab-global'),
     tabModels: document.getElementById('tab-models'),
     tabWorkflows: document.getElementById('tab-workflows'),
     
-    // Workflows
     workflowsList: document.getElementById('workflows-list'),
     addWorkflowBtn: document.getElementById('add-workflow-btn'),
     
-    // Workflow Editor
     workflowEditorOverlay: document.getElementById('workflow-editor-overlay'),
     workflowNameInput: document.getElementById('workflow-name-input'),
     workflowScriptInput: document.getElementById('workflow-script-input'),
-    workflowEditorSaveBtn: document.getElementById('workflow-editor-save-btn'),
     workflowEditorCancelBtn: document.getElementById('workflow-editor-cancel-btn'),
 };

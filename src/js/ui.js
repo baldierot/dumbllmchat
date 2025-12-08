@@ -223,11 +223,22 @@ export async function renderConversations(app) {
     }
 };
 
-export function renderLlmConfigs(chatAPI) {
+export async function renderLlmConfigs(chatAPI) {
+    const apiKeyGroups = await window.db.getApiKeyGroups();
+    const apiKeyGroupOptions = apiKeyGroups.map(group => `<option value="${group.id}">${group.name}</option>`).join('');
+
     dom.llmConfigsContainer.innerHTML = '';
     chatAPI.getModels().forEach((model, index) => {
         const configDiv = document.createElement('div');
         configDiv.className = 'mb-4 p-2 border border-black rounded-lg dark:border-black';
+        
+        const apiKeyGroupSelect = `
+            <select class="api-key-group-selector w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" data-index="${index}">
+                <option value="" disabled ${!model.apiKeyGroupId ? 'selected' : ''}>Select Key Group...</option>
+                ${apiKeyGroupOptions}
+            </select>
+        `;
+
         configDiv.innerHTML = `
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-lg font-semibold">${model.nickname}</h3>
@@ -240,10 +251,11 @@ export function renderLlmConfigs(chatAPI) {
             <input type="text" value="${model.modelName}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Model Name">
             <input type="text" value="${model.nickname}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Nickname">
             <textarea class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="System Prompt">${model.system_prompt}</textarea>
+            
+            ${apiKeyGroupSelect}
+
             <div class="openai-config ${model.type === 'openai' ? '' : 'hidden'}">
                 <input type="text" value="${model.endpoint || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600 openai-endpoint" placeholder="API Endpoint (e.g., https://api.groq.com/openai/v1/chat/completions)">
-                <input type="text" value="${model.apiKey || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600 openai-api-key" placeholder="API Key (Leave blank to use Global API Key)">
-
                 <input type="text" value="${model.reasoningEffort || ''}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600 openai-reasoning-effort" placeholder="Reasoning Effort (e.g., none, default, low, medium, high)">
             </div>
             <input type="number" step="0.1" value="${model.temperature}" class="w-full p-2 mb-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="Temperature">
@@ -265,6 +277,11 @@ export function renderLlmConfigs(chatAPI) {
             </div>
         `;
         dom.llmConfigsContainer.appendChild(configDiv);
+        
+        const apiKeyGroupSelector = configDiv.querySelector('.api-key-group-selector');
+        if (model.apiKeyGroupId) {
+            apiKeyGroupSelector.value = model.apiKeyGroupId;
+        }
     });
 
     document.querySelectorAll('.remove-model-btn').forEach(btn => {
@@ -294,9 +311,6 @@ export function renderLlmConfigs(chatAPI) {
             }
         });
     });
-
-
-
 };
 
 export function renderGlobalSettings(chatAPI) {
@@ -304,31 +318,9 @@ export function renderGlobalSettings(chatAPI) {
     dom.proxyUrl.value = globalSettings.proxy || '';
     dom.sequentialWorkflowRequests.checked = globalSettings.sequentialWorkflowRequests ?? true;
     dom.workflowRequestDelay.value = globalSettings.workflowRequestDelay || 0;
-    dom.apiKeysContainer.innerHTML = '';
-    globalSettings.apiKeys.forEach(key => {
-        addApiKeyInput(key);
-    });
+    dom.apiRetryDelay.value = globalSettings.apiRetryDelay ?? 200;
 }
 
-export function addApiKeyInput(key = '') {
-    const div = document.createElement('div');
-    div.className = 'flex items-center space-x-2';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = key;
-    input.className = 'api-key-input w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600';
-    input.placeholder = 'API Key';
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.textContent = '➖';
-    removeBtn.className = 'text-xl';
-    removeBtn.addEventListener('click', () => {
-        div.remove();
-    });
-    div.appendChild(input);
-    div.appendChild(removeBtn);
-    dom.apiKeysContainer.appendChild(div);
-}
 
 
 export function renderAttachedFiles(app) {
@@ -364,6 +356,7 @@ export function switchSettingsTab(tabName) {
     dom.tabGlobal.classList.add('hidden');
     dom.tabModels.classList.add('hidden');
     dom.tabWorkflows.classList.add('hidden');
+    document.getElementById('tab-api-keys').classList.add('hidden');
 
     // Deactivate all tab buttons
     dom.settingsTabs.querySelectorAll('button').forEach(btn => {
@@ -379,6 +372,42 @@ export function switchSettingsTab(tabName) {
         activeTab.classList.add('border-blue-500', 'text-blue-500');
         activeTab.classList.remove('text-gray-500');
     }
+
+    if (tabName === 'api-keys') {
+        renderApiKeyGroups();
+    }
+    if (tabName === 'models') {
+        renderLlmConfigs(window.chatAPI);
+    }
+}
+
+export async function renderApiKeyGroups() {
+    const groups = await window.db.getApiKeyGroups();
+    const container = document.getElementById('api-key-groups-container');
+    container.innerHTML = '';
+
+    groups.forEach(group => {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'mb-4 p-2 border rounded-lg dark:border-gray-600';
+        groupDiv.dataset.groupId = group.id;
+
+        groupDiv.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <input type="text" value="${group.name}" class="group-name-input text-lg font-semibold bg-transparent border-b dark:border-gray-500 focus:outline-none focus:border-blue-500">
+                <button type="button" class="remove-api-key-group-btn text-xl">➖</button>
+            </div>
+            <div class="api-keys-list space-y-2">
+                ${(group.keys || []).map(key => `
+                    <div class="flex items-center space-x-2">
+                        <input type="text" value="${key}" class="api-key-input w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" placeholder="API Key">
+                        <button type="button" class="remove-api-key-btn text-xl">➖</button>
+                    </div>
+                `).join('')}
+            </div>
+            <button type="button" class="add-api-key-to-group-btn mt-2 text-sm p-2 bg-blue-500 text-white rounded-lg">Add Key</button>
+        `;
+        container.appendChild(groupDiv);
+    });
 }
 
 export async function renderWorkflowsList(app) {

@@ -59,6 +59,7 @@
             <!-- Tab Navigation -->
             <div id="settings-tabs" class="flex border-b border-gray-200 dark:border-gray-700 mb-4">
                 <button data-tab="global" class="py-2 px-4 font-semibold border-b-2 border-blue-500 text-blue-500">Global</button>
+                <button data-tab="api-keys" class="py-2 px-4 font-semibold text-gray-500">Keys</button>
                 <button data-tab="models" class="py-2 px-4 font-semibold text-gray-500">Models</button>
                 <button data-tab="workflows" class="py-2 px-4 font-semibold text-gray-500">Workflows</button>
             </div>
@@ -82,14 +83,17 @@
                                 <input type="number" id="workflow-request-delay" placeholder="Delay between model requests in workflow (seconds)" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" min="0" value="0">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium">API Keys</label>
-                                <div id="api-keys-container" class="space-y-2">
-                                    <!-- API Key inputs will be added here -->
-                                </div>
-                                <button type="button" id="add-api-key-btn" class="mt-2 text-sm p-2 bg-blue-500 text-white rounded-lg">Add API Key</button>
+                                <label for="api-retry-delay" class="block text-sm font-medium">API Retry Delay (ms)</label>
+                                <input type="number" id="api-retry-delay" placeholder="Delay between API key retries (ms)" class="w-full p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600" min="0" value="200">
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- API Keys Tab -->
+                <div id="tab-api-keys" class="hidden p-2">
+                    <div id="api-key-groups-container"></div>
+                    <button type="button" id="add-api-key-group-btn" class="mt-4 text-2xl">➕ Add Group</button>
                 </div>
 
                 <!-- Models Tab -->
@@ -107,12 +111,11 @@
                 </div>
             </div>
 
-            <div class="flex justify-between mt-4">
+            <div class="flex justify-end mt-4">
                 <div>
                     <button type="button" id="import-settings-btn" class="text-2xl mr-2">📥</button>
                     <button type="button" id="export-settings-btn" class="text-2xl">📤</button>
                 </div>
-                <button type="submit" id="save-settings-btn" class="text-2xl">💾</button>
             </div>
             <button id="close-settings-btn" class="absolute top-2 right-2 text-2xl">❌</button>
         </div>
@@ -148,8 +151,7 @@
             <textarea id="workflow-script-input" class="flex-grow font-mono p-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 w-full h-full resize-none whitespace-pre overflow-x-auto" placeholder="#id model +flag: prompt..."></textarea>
         </div>
         <div class="flex justify-end mt-4">
-            <button id="workflow-editor-cancel-btn" class="mr-4 py-2 px-4 bg-gray-500 text-white rounded-lg">Cancel</button>
-            <button id="workflow-editor-save-btn" class="py-2 px-4 bg-blue-500 text-white rounded-lg">Save</button>
+            <button id="workflow-editor-cancel-btn" class="py-2 px-4 bg-gray-500 text-white rounded-lg">Close</button>
         </div>
     </div>
 
